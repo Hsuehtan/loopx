@@ -1,0 +1,78 @@
+"""Compilation reuse cannot replace the original runtime or its admission."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import time
+
+import pytest
+
+from loopx.control_plane import effect_runtime
+
+
+@pytest.mark.parametrize("cache_mode", ["enabled", "disabled", "unavailable"])
+def test_original_launcher_serves_and_restarts_with_optional_cache(
+    tmp_path: Path, monkeypatch, cache_mode: str,
+) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700)
+    cache = runtime / "compile-cache"
+    monkeypatch.setattr(effect_runtime, "_runtime_dir", lambda: runtime)
+    for name in ("NODE_COMPILE_CACHE", "NODE_DISABLE_COMPILE_CACHE", "NODE_V8_COVERAGE"):
+        monkeypatch.delenv(name, raising=False)
+    if cache_mode == "disabled":
+        monkeypatch.setenv("NODE_DISABLE_COMPILE_CACHE", "1")
+    elif cache_mode == "unavailable":
+        cache.write_text("not a cache", encoding="utf-8")
+    monkeypatch.setenv("LOOPX_EFFECT_RUNTIME_IDLE_MS", "60000")
+    launches: list[list[str]] = []
+    original_popen = effect_runtime.subprocess.Popen
+
+    def observed_popen(args, *rest, **kwargs):
+        launches.append(list(args))
+        return original_popen(args, *rest, **kwargs)
+
+    monkeypatch.setattr(effect_runtime.subprocess, "Popen", observed_popen)
+    try:
+        first = effect_runtime.effect_runtime_result("runtime.ping", {})
+        assert effect_runtime.effect_runtime_result("runtime.ping", {}) == first
+        argv = next(args for args in launches if "--info" in args)
+        assert argv[argv.index("--import") + 1].endswith("effect_runtime_compile_cache.ts")
+        assert str(effect_runtime._runtime_server_path()) in argv
+        fingerprint = effect_runtime._runtime_fingerprint()
+        assert argv[argv.index("--fingerprint") + 1] == fingerprint
+        info = effect_runtime._read_info(effect_runtime._runtime_info_path(fingerprint),
+                                         fingerprint=fingerprint)
+        assert info is not None
+        with pytest.raises(effect_runtime.EffectRuntimeRejected) as rejected:
+            effect_runtime._request_with_info(
+                {**info, "token": "not-the-serving-token"}, request_id="wrong-token",
+                method="runtime.ping", params={}, timeout=2,
+            )
+        assert rejected.value.diagnostic_code == "authentication_failed"
+        assert effect_runtime.effect_runtime_result("runtime.ping", {}) == first
+        assert effect_runtime.restart_effect_runtime()["status"] == "stopped"
+        if cache_mode == "enabled":
+            deadline = time.monotonic() + 5
+            while not any(p.is_file() for p in cache.rglob("*")):
+                assert time.monotonic() < deadline, "normal shutdown must populate code cache"
+                time.sleep(0.01)
+            if hasattr(os, "getuid"):
+                assert cache.stat().st_mode & 0o077 == 0
+        elif cache_mode == "disabled":
+            assert not cache.exists()
+        else:
+            assert cache.read_text(encoding="utf-8") == "not a cache"
+        second = effect_runtime.effect_runtime_result("runtime.ping", {})
+        assert second["pid"] != first["pid"]
+    finally:
+        effect_runtime.restart_effect_runtime()
+
+
+def test_compile_preload_is_part_of_the_source_fingerprint(tmp_path: Path, monkeypatch) -> None:
+    preload = tmp_path / "effect_runtime_compile_cache.ts"
+    preload.write_text("export const version = 1;\n", encoding="utf-8")
+    monkeypatch.setattr(effect_runtime, "_control_plane_root", lambda: tmp_path)
+    original = effect_runtime._runtime_fingerprint()
+    preload.write_text("export const version = 2;\n", encoding="utf-8")
+    assert effect_runtime._runtime_fingerprint() != original

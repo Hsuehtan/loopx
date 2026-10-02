@@ -213,6 +213,33 @@ best-effort 进程树边界。
 权限。这不增加配置、授权或 UI 权威。
 一次性 CLI 仍承担冷启动，热服务的加速不能冒充冷 CLI 的加速。
 
+The managed Effect launcher also preloads a small TypeScript module before the
+server's static imports to enable [Node's native compilation cache](https://nodejs.org/api/module.html#module-compile-cache). The default
+cache lives inside the existing private temporary Effect namespace; it stores
+compiled code, not Goal data, decisions or permissions. Node validates module
+contents and separates Node versions. The original source fingerprint, startup
+authentication, readiness checks and request deadlines remain authoritative.
+Cache fill has a first-load cost, and code cache is written on normal Node exit;
+measure first fill separately from populated-cache restart and resident reuse.
+An unavailable, non-private or symlinked default cache leaves normal source
+execution working, without changing its permissions. Existing explicit
+`NODE_COMPILE_CACHE` behavior is retained. Set `NODE_DISABLE_COMPILE_CACHE=1`
+to disable compilation reuse, including for precise V8 coverage; the default
+preload does not enable it in `NODE_V8_COVERAGE` runs. This internal optimization
+adds no capability setting, frontend/Lark state or authority owner. A faster
+module load alone does not qualify whole-CLI latency or requester adoption.
+
+中文：Effect 启动器在 server 的静态导入之前 preload 一个小型 TS 模块，启用
+Node 原生编译缓存。默认目录位于既有私有临时 Effect namespace；只保存编译后的
+代码，不保存 Goal 数据、判决或权限。Node 校验模块内容并隔离 Node 版本；原源码
+指纹、启动鉴权、就绪校验和请求截止时间保持权威。首次填充有成本，代码缓存在
+Node 正常退出时写出；首次填充、已有缓存的重启和常驻复用须分别测量。默认缓存
+不可用、非私有或为符号链接时，继续执行原源码，不修改既有权限。保留显式
+`NODE_COMPILE_CACHE` 行为；`NODE_DISABLE_COMPILE_CACHE=1` 可关闭编译复用，
+包括精确 V8 coverage 场景；默认 preload 在 `NODE_V8_COVERAGE` 下不启用缓存。
+这不新增 capability 设置、前端／Lark 状态或权限 owner。模块加载变快不等于完整
+CLI 耗时或原请求方采用已验收。
+
 ### Preview performance qualification / 预检性能验收
 
 Qualify the useful caller path, not the total duration of a pytest suite. A

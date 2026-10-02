@@ -856,6 +856,8 @@ def _start_runtime(*, fingerprint: str, info_path: Path) -> dict[str, Any]:
                         _node_executable(),
                         "--no-warnings",
                         "--experimental-strip-types",
+                        "--import",
+                        str(_control_plane_root() / "effect_runtime_compile_cache.ts"),
                         str(_runtime_server_path()),
                         "--info",
                         str(info_path),
