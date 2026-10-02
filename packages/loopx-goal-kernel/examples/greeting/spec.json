@@ -1,0 +1,17 @@
+{
+  "goal_id": "greeting",
+  "objective": "Create greeting.py in this project and prove it prints exactly 'hello'.",
+  "predicates": [
+    {
+      "id": "p1",
+      "statement": "greeting.py exists in the project root",
+      "verify": { "kind": "file_exists", "path": "greeting.py" }
+    },
+    {
+      "id": "p2",
+      "statement": "running python3 greeting.py prints hello",
+      "verify": { "kind": "command", "run": "python3 greeting.py", "expect_stdout": "hello", "timeout_ms": 30000 }
+    }
+  ],
+  "policy": { "max_turns": 8, "max_idle_turns": 2 }
+}

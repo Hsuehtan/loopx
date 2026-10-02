@@ -1,0 +1,29 @@
+name: Goal kernel experiment
+on:
+  pull_request:
+    paths:
+      - 'packages/loopx-goal-kernel/**'
+      - '.github/workflows/goal-kernel.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/loopx-goal-kernel/**'
+      - '.github/workflows/goal-kernel.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/loopx-goal-kernel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          cache: npm
+          cache-dependency-path: packages/loopx-goal-kernel/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
