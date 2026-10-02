@@ -2,12 +2,41 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from loopx.control_plane import effect_runtime
+
+
+@pytest.mark.parametrize(("root", "expected_preload"), [
+    (PureWindowsPath("D:/checkout # %/control_plane"),
+     "file:///D:/checkout%20%23%20%25/control_plane/effect_runtime_compile_cache.ts"),
+    (PureWindowsPath("//server/share/checkout # %/control_plane"),
+     "file://server/share/checkout%20%23%20%25/control_plane/effect_runtime_compile_cache.ts"),
+    (PurePosixPath("/checkout # %/control_plane"),
+     "file:///checkout%20%23%20%25/control_plane/effect_runtime_compile_cache.ts"),
+])
+def test_launcher_uses_an_encoded_file_url_for_the_esm_preload(
+    tmp_path: Path, monkeypatch, root, expected_preload: str,
+) -> None:
+    ready = {"ready": True}
+    observations = iter([None, ready])
+    launches = []
+    monkeypatch.setattr(effect_runtime, "_control_plane_root", lambda: root)
+    monkeypatch.setattr(effect_runtime, "_node_executable", lambda: "node")
+    monkeypatch.setattr(effect_runtime, "_read_info", lambda *_args, **_kwargs: next(observations))
+    monkeypatch.setattr(effect_runtime.subprocess, "Popen", lambda args, **_kwargs:
+                        launches.append(args) or SimpleNamespace(poll=lambda: None))
+    info = tmp_path / "runtime" / "runtime.json"
+    assert effect_runtime._start_runtime(fingerprint="f" * 64, info_path=info) == ready
+    argv = launches[0]
+    assert argv[argv.index("--import") + 1] == expected_preload
+    # The positional script and info argument are filesystem paths, not ESM specifiers.
+    assert str(root / "effect_runtime_server.ts") in argv
+    assert argv[argv.index("--info") + 1] == str(info)
 
 
 @pytest.mark.parametrize("cache_mode", ["enabled", "disabled", "unavailable"])
@@ -37,7 +66,9 @@ def test_original_launcher_serves_and_restarts_with_optional_cache(
         first = effect_runtime.effect_runtime_result("runtime.ping", {})
         assert effect_runtime.effect_runtime_result("runtime.ping", {}) == first
         argv = next(args for args in launches if "--info" in args)
-        assert argv[argv.index("--import") + 1].endswith("effect_runtime_compile_cache.ts")
+        assert argv[argv.index("--import") + 1] == (
+            effect_runtime._control_plane_root() / "effect_runtime_compile_cache.ts"
+        ).as_uri()
         assert str(effect_runtime._runtime_server_path()) in argv
         fingerprint = effect_runtime._runtime_fingerprint()
         assert argv[argv.index("--fingerprint") + 1] == fingerprint

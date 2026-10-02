@@ -857,7 +857,9 @@ def _start_runtime(*, fingerprint: str, info_path: Path) -> dict[str, Any]:
                         "--no-warnings",
                         "--experimental-strip-types",
                         "--import",
-                        str(_control_plane_root() / "effect_runtime_compile_cache.ts"),
+                        # ESM specifiers require file URLs on Windows; encode
+                        # reserved path characters on every platform as well.
+                        (_control_plane_root() / "effect_runtime_compile_cache.ts").as_uri(),
                         str(_runtime_server_path()),
                         "--info",
                         str(info_path),

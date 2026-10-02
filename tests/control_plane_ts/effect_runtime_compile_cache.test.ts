@@ -5,16 +5,18 @@ import { chmodSync, lstatSync, mkdtempSync, mkdirSync, readdirSync, readFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 
-const preload = fileURLToPath(new URL(
+const preloadSource = new URL(
   "../../loopx/control_plane/effect_runtime_compile_cache.ts", import.meta.url,
-));
+);
 
 function fixture(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "loopx-compile-cache-"));
   chmodSync(root, 0o700);
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  const preload = join(root, "preload # % 中文.ts");
+  writeFileSync(preload, readFileSync(preloadSource));
   const script = join(root, "caller.ts"), source = join(root, "value.ts");
   writeFileSync(source, "export const value: number = 1;\n");
   writeFileSync(script, `import { value } from './value.ts';
@@ -28,7 +30,7 @@ function fixture(t: TestContext) {
   delete environment.NODE_V8_COVERAGE;
   function run(overrides: Record<string, string> = {}, info = join(root, "runtime.json")) {
     const result = spawnSync(process.execPath, ["--no-warnings", "--experimental-strip-types",
-      "--import", preload, script, "--info", info], {
+      "--import", pathToFileURL(preload).href, script, "--info", info], {
       env: { ...environment, ...overrides }, encoding: "utf8", timeout: 10_000,
     });
     assert.equal(result.error, undefined);
