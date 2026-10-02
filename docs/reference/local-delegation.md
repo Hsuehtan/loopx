@@ -180,6 +180,8 @@ supervises that worker: each preview retains its 60-second request deadline;
 timeout, cancellation, malformed output and parent EOF stop its process group
 before a verifiable failure is returned. If cleanup cannot be established, the
 transport fails closed without a preview or an automatic fallback/retry.
+Input backpressure and partial output reads share the parent's original absolute
+deadline; waiting for the supervised cleanup remains a separate bounded fence.
 POSIX cleanup is process-group scoped; Windows retains the Host owner's
 best-effort process-tree cleanup boundary.
 
@@ -201,6 +203,7 @@ a warm-service measurement is not evidence of a faster cold CLI.
 非法输出或父端 EOF 后，先确认进程组停止，再返回可核验失败；若无法确认清理，
 不给预检结果，也不自动回退或重试。POSIX 按进程组清理，Windows 保留既有的
 best-effort 进程树边界。
+输入管道背压和不完整输出共用父端原绝对截止时间；监督清理仍是另一个有界屏障。
 
 只复用已加载模块，不缓存准入、权限或结果。registry/runtime/binding、工作区身份、
 解释器、环境或包内源码变化时，先退役旧进程；每次仍执行原 CLI 决策 owner，重读

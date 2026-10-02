@@ -109,7 +109,7 @@ class DelegationPreviewTransport:
                              agent_id, "--todo-id", todo_id],
                     "cwd": str(workspace), "input": "", "timeout_ms": 60000,
                     "drain_timeout_ms": 2000, "stdout_limit_bytes": 1_048_576,
-                }})
+                }}, started + timeout, timeout)
                 if self._read(started + timeout, timeout) != {"kind": "ready"}:
                     raise ValueError("delegation preview did not start")
             remaining = timeout - (time.monotonic() - started)
@@ -117,7 +117,8 @@ class DelegationPreviewTransport:
                 raise subprocess.TimeoutExpired(["delegation-preview"], timeout)
             self._sequence += 1
             self._send({"kind": "request", "id": self._sequence,
-                        "argv": list(argv), "timeout_ms": min(remaining, 60) * 1000})
+                        "argv": list(argv), "timeout_ms": min(remaining, 60) * 1000},
+                       started + timeout, timeout)
             response = self._read(started + timeout, timeout)
             if response.get("kind") == "failure" and response.get("outcome") == "timeout":
                 raise subprocess.TimeoutExpired(["delegation-preview"], timeout)
@@ -132,10 +133,35 @@ class DelegationPreviewTransport:
         finally:
             self._lock.release()
 
-    def _send(self, value: dict) -> None:
+    def _send(self, value: dict, deadline: float, timeout: float) -> None:
         assert self._process is not None and self._process.stdin is not None
-        self._process.stdin.write(json.dumps(value) + "\n")
-        self._process.stdin.flush()
+        stream = self._process.stdin
+        result: Queue = Queue(maxsize=1)
+        data = (json.dumps(value) + "\n").encode("utf-8")
+
+        def write() -> None:
+            try:
+                remaining = memoryview(data)
+                while remaining:
+                    written = os.write(stream.fileno(), remaining)
+                    if written <= 0:
+                        raise OSError("preview input closed")
+                    remaining = remaining[written:]
+                result.put(None)
+            except Exception as error:
+                result.put(error)
+
+        # Raw pipe IO avoids a buffered-stream lock that would also block the
+        # cleanup close while a writer waits for capacity. No decision runs in
+        # this thread. Timeout closes the same control pipe and waits for the
+        # original TS owner; uncertain cleanup still forbids a replacement.
+        Thread(target=write, daemon=True).start()
+        try:
+            error = result.get(timeout=max(0, deadline - time.monotonic()))
+        except Empty:
+            raise subprocess.TimeoutExpired(["delegation-preview"], timeout) from None
+        if error is not None:
+            raise error
 
     def _read(self, deadline: float, timeout: float) -> dict:
         assert self._process is not None and self._process.stdout is not None

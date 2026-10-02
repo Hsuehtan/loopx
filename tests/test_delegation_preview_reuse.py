@@ -1,12 +1,15 @@
 """Real original CLI comparisons; reusable processes must not reuse decisions."""
 import asyncio
 import json
+import os
+import signal
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
+from threading import Timer
 
 import pytest
 from mcp import ClientSession, StdioServerParameters
@@ -310,3 +313,52 @@ def test_partial_supervisor_frame_obeys_parent_deadline_and_eof_cleanup():
         transport.close()
     assert time.monotonic() - started < 2
     assert process.poll() == 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGSTOP fault injection requires POSIX")
+def test_backpressured_supervisor_input_uses_original_parent_deadline(tmp_path, monkeypatch):
+    from loopx.control_plane.collaboration.delegation_preview_transport import DelegationPreviewTransport
+
+    transport = DelegationPreviewTransport()
+    worker = (
+        "import json,sys\nfor line in sys.stdin:\n"
+        " r=json.loads(line);print(json.dumps({'kind':'preview','id':r['id'],"
+        "'returncode':0,'value':{'read_only':True}}),flush=True)"
+    )
+    options = dict(command=[sys.executable, "-c", worker], workspace=tmp_path,
+                   release=tmp_path, environment=_pinned_release_environment(),
+                   registry=tmp_path / "registry.json", runtime_root=tmp_path / "runtime",
+                   goal_id="fixture-goal", agent_id="fixture-agent", todo_id="todo_fixture")
+    original_send = transport._send
+    send_durations = []
+
+    def measured_send(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            return original_send(*args, **kwargs)
+        finally:
+            send_durations.append(time.monotonic() - started)
+
+    monkeypatch.setattr(transport, "_send", measured_send)
+    timer = None
+    process = None
+    try:
+        assert transport.preview(**options, argv=("warm",), timeout=5) == {"read_only": True}
+        process = transport._process
+        # Stop only our disposable supervisor. A valid sub-limit frame fills
+        # its pipe; the parent must stop waiting for input before the watchdog
+        # resumes cleanup, not merely time out the subsequent output read.
+        os.kill(process.pid, signal.SIGSTOP)
+        timer = Timer(1, lambda: os.kill(process.pid, signal.SIGCONT))
+        timer.start()
+        with pytest.raises(subprocess.TimeoutExpired):
+            transport.preview(**options, argv=("x" * 65536,), timeout=0.1)
+        assert send_durations[-1] < 0.4, send_durations
+        assert transport._process is None
+        assert process.poll() == 0
+    finally:
+        if timer:
+            timer.cancel()
+        if process and process.poll() is None:
+            os.kill(process.pid, signal.SIGCONT)
+        transport.close()
