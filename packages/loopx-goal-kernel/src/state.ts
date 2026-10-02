@@ -84,4 +84,3 @@ export function updateAcceptance(state: KernelState, currentlySatisfied: string[
     else if (todo.status === "done" && !satisfied.has(todo.advances)) todo.status = "open";
   }
 }
-

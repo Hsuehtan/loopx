@@ -78,4 +78,3 @@ function formatReceiptLine(receipt: Record<string, unknown>): string {
   const note = typeof receipt.note === "string" && receipt.note ? ` note=${JSON.stringify(receipt.note.slice(0, 120))}` : "";
   return `${receipt.at} turn ${receipt.turn_index} claimed=[${closed.join(",")}] verified=[${ok.join(",")}] new=${upgraded.length} progress=${receipt.progress ? "yes" : "no"}${note}`;
 }
-
