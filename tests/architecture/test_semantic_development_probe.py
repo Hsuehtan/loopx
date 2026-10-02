@@ -345,12 +345,11 @@ def probe_cli(repository: Path) -> Path:
 
 
 def _run_probe_cli(repository: Path) -> subprocess.CompletedProcess[str]:
-    # pytest-cov injects subprocess startup variables. The synthetic checkout
-    # must not contribute temporary source paths to real CI.
+    # The copied CLI runs in a disposable repository. Do not merge its coverage
+    # into the source checkout: pytest removes that repository before CI reports.
     env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith(("PYTEST", "COVERAGE", "COV_CORE"))
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("COV_CORE_", "COVERAGE_"))
     }
     return subprocess.run(
         [
