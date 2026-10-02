@@ -202,6 +202,12 @@ This is an internal transport change, not a new capability setting, execution
 grant or UI source of truth. A one-shot CLI inspection still pays its original cold startup;
 a warm-service measurement is not evidence of a faster cold CLI.
 
+Authority loss at either acceptance read, including the final read after the
+Turn preview, returns the same typed unavailable projection without exposing
+earlier acceptance or executable permission. Workspace loss or replacement
+still takes precedence. A later inspection rereads recovered authority; there
+is no automatic retry, provider promotion or fallback.
+
 中文：长驻 collaboration MCP server 显式启用预检复用；一次性 CLI 和每个请求新建
 服务的 Goal Chat 保留原 fresh CLI subprocess，不启动预检监督进程，也不承担其清理
 成本。这只是入口生命周期选择，不新增用户配置。长驻 `Delegations` 服务的连续预检
@@ -219,6 +225,10 @@ best-effort 进程树边界。
 续期和嵌套进程清理。带租约的命令不进入预检 worker，预检复用不授予租约或执行
 权限。这不增加配置、授权或 UI 权威。
 一次性 CLI 仍承担原来的冷启动，热服务的加速不能冒充冷 CLI 的加速。
+
+首次验收读取或预检后的末次复读遇到权限存储不可用时，均返回同一类型化不可用
+投影，不返回旧验收或可执行许可；工作区消失或被替换仍优先处理。后续检查重新
+读取已恢复的权限存储，不自动重试、晋升 provider 或回退。
 
 The managed Effect launcher also preloads a small TypeScript module before the
 server's static imports to enable [Node's native compilation cache](https://nodejs.org/api/module.html#module-compile-cache). The default

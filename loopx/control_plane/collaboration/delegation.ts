@@ -220,7 +220,8 @@ export function delegationPreflight(params: JsonObject): JsonObject {
       authority_state: authorityState, authority_next_action: authorityNextAction,
       promotion_from_surface_allowed: false,
       executor: null, effects,
-      note: "Canonical authority is unavailable, so no Turn or provider was inspected or launched. "
+      note: "Current canonical authority cannot be confirmed, so no executable permission is returned. "
+        + "No host was launched and no state was written or quota spent. "
         + "Promote or repair authority explicitly before retrying; inspection never promotes a provider.",
     };
   }

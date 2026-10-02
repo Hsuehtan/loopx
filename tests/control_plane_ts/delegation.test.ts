@@ -313,7 +313,7 @@ test("requester adoption needs accepted downstream use, not reading, revision or
   }
 });
 
-test("preflight reports unavailable canonical authority without pretending to inspect a Turn", () => {
+test("preflight reports unavailable current authority without granting execution", () => {
   const result = delegationPreflight({binding, authority: {ready: false,
     reason: "Goal acceptance requires an existing canonical authority"}, preview: null,
   acceptance: null, validation_files_current: false});
@@ -326,6 +326,8 @@ test("preflight reports unavailable canonical authority without pretending to in
   assert.equal(result.executor, null);
   assert.equal(Object.values(result.effects as Record<string, boolean>).some(Boolean), false);
   assert.match(String(result.authority_reason), /canonical authority/);
+  assert.doesNotMatch(String(result.note), /no Turn or provider was inspected/);
+  assert.match(String(result.note), /no executable permission is returned/);
   const legacy = delegationPreflight({binding, authority: {ready: false,
     reason: "canonical authority absent", state: "promotion_required",
     next_action: "preview_reviewed_goal_authority_promotion"}, preview: null,

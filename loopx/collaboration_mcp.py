@@ -461,14 +461,7 @@ class Delegations:
                 current_state if current_state != "available" else "unavailable"
             )
 
-        if workspace_state != "available":
-            if self.binding(binding_id, require_active=True) != binding:
-                raise ValueError("delegation preflight source changed; retry inspection")
-            return workspace_fault(workspace_state)
-        assert workspace_identity is not None
-        try:
-            acceptance = delegation_validation.capture(self, binding)
-        except (OSError, ValueError) as exc:
+        def authority_fault(exc: OSError | ValueError) -> dict[str, object]:
             fault = recheck_workspace()
             if fault is not None:
                 return fault
@@ -498,6 +491,16 @@ class Delegations:
                 },
                 "preview": None, "acceptance": None, "validation_files_current": False,
             })
+
+        if workspace_state != "available":
+            if self.binding(binding_id, require_active=True) != binding:
+                raise ValueError("delegation preflight source changed; retry inspection")
+            return workspace_fault(workspace_state)
+        assert workspace_identity is not None
+        try:
+            acceptance = delegation_validation.capture(self, binding)
+        except (OSError, ValueError) as exc:
+            return authority_fault(exc)
         fault = recheck_workspace()
         if fault is not None:
             return fault
@@ -546,11 +549,10 @@ class Delegations:
             raise ValueError(f"delegation Turn preflight unavailable: {preview.get('error') or preview.get('status')}")
         try:
             current = delegation_validation.capture(self, binding)
-        except (OSError, ValueError):
-            fault = recheck_workspace()
-            if fault is not None:
-                return fault
-            raise
+        except (OSError, ValueError) as exc:
+            # Do not return the first acceptance or an already-read preview
+            # when current authority cannot be confirmed at the final fence.
+            return authority_fault(exc)
         fault = recheck_workspace()
         if fault is not None:
             return fault
