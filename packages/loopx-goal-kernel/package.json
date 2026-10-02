@@ -1,0 +1,23 @@
+{
+  "name": "loopx-goal-kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Experimental bounded Codex loop with revalidated acceptance checkpoints",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "bin": {
+    "loopx-goal": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --no-warnings --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:live": "node --no-warnings --experimental-strip-types examples/live-smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3"
+  }
+}
