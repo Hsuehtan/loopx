@@ -213,7 +213,9 @@ def create_server(
     server = FastMCP("loopx-collaboration")
     register_collaboration_tools(server, root, registry, goal_id, agent_id, workspace)
     if execution_config is not None:
-        register_delegation_tools(server, Delegations(root, registry, goal_id, agent_id, execution_config))
+        register_delegation_tools(server, Delegations(
+            root, registry, goal_id, agent_id, execution_config, reuse_preview=True,
+        ))
     return server
 
 
@@ -365,13 +367,19 @@ class Delegations:
     share this host entrypoint instead of maintaining a second control-plane CLI.
     """
 
-    def __init__(self, root: Path, registry: Path, goal_id: str, agent_id: str, config: Path):
+    def __init__(self, root: Path, registry: Path, goal_id: str, agent_id: str, config: Path,
+                 *, reuse_preview: bool = False):
         self.root, self.registry = root.resolve(), registry.resolve()
         self.goal_id, self.agent_id, self.config = goal_id, agent_id, config.resolve()
         self._goal_ref_lock = Lock()
-        from .control_plane.collaboration.delegation_preview_transport import DelegationPreviewTransport
+        # Only an entrypoint that owns a reusable service lifetime opts in.
+        # CLI and per-request Goal Chat services keep the original one-shot IO;
+        # starting a supervisor there cannot amortize its cold/cleanup cost.
+        self._preview_transport = None
+        if reuse_preview:
+            from .control_plane.collaboration.delegation_preview_transport import DelegationPreviewTransport
 
-        self._preview_transport = DelegationPreviewTransport()
+            self._preview_transport = DelegationPreviewTransport()
         try:
             self.goal_ref = capture_collaboration_goal_ref(
                 self.registry,
@@ -805,7 +813,7 @@ class Delegations:
 
     def _cli(self, binding: dict, *args: str, timeout: int = 60,
              delegated_lease: dict | None = None) -> dict:
-        if delegated_lease is None and args[:2] == ("turn", "run-once") and not any(
+        if self._preview_transport is not None and delegated_lease is None and args[:2] == ("turn", "run-once") and not any(
             flag in args for flag in ("--execute", "--resume-turn-key")
         ):
             # Inspection already fences selectors using the original parser;

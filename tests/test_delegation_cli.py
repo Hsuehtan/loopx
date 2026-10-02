@@ -106,6 +106,30 @@ def test_cli_invalid_inputs_do_not_launch_work(service):
     assert status == 1 and not result["ok"]
 
 
+def test_one_shot_cli_inspection_keeps_original_subprocess(service, monkeypatch, capsys):
+    """The real CLI entry must not pay for a worker it cannot reuse."""
+    from loopx.cli import main
+    from loopx.control_plane.collaboration.delegation_preview_transport import DelegationPreviewTransport
+
+    root, runner = service
+    assert runner._preview_transport is None
+    before = runner.registry.read_bytes(), runner.config.read_bytes(), demo.canonical_tasks(root)
+
+    def no_supervisor(*args, **kwargs):
+        raise AssertionError("single-use CLI started preview reuse")
+
+    monkeypatch.setattr(DelegationPreviewTransport, "__init__", no_supervisor)
+    expected = runner.inspect("analysis")
+    assert main(["--registry", str(runner.registry), "--runtime-root", str(runner.root),
+                 "--format", "json", "delegation", "inspect", "--goal-id", runner.goal_id,
+                 "--agent-id", runner.agent_id, "--execution-config", str(runner.config),
+                 "--binding-id", "analysis"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": True, **expected}
+    assert (runner.registry.read_bytes(), runner.config.read_bytes(), demo.canonical_tasks(root)) == before
+    assert not (root / "host-started").exists()
+    assert not list((root / "runtime" / "goals").glob("*/turns/*.json"))
+
+
 def test_shared_execution_host_does_not_require_optional_mcp():
     script = """
 import importlib.abc, sys

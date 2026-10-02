@@ -980,12 +980,18 @@ def test_preflight_does_not_call_an_invalidated_acceptance_ready(service):
 
 
 @pytest.mark.parametrize("validation_basis", ["goal_acceptance", "independent", "missing_workspace", "independent_missing", "validation_files_unavailable"])
-def test_http_team_readback_uses_original_scope_without_a_new_turn(service, validation_basis):
+def test_http_team_readback_uses_original_scope_without_a_new_turn(service, validation_basis, monkeypatch):
     import http.client
     import threading
     from loopx.chat_runtime import ChatRuntimeController
     from loopx.chat_server import ChatHTTPServer, ChatRequestHandler
     from loopx.chat_store import ChatSessionStore
+    from loopx.control_plane.collaboration.delegation_preview_transport import DelegationPreviewTransport
+
+    def no_supervisor(*args, **kwargs):
+        raise AssertionError("per-request HTTP inspection started preview reuse")
+
+    monkeypatch.setattr(DelegationPreviewTransport, "__init__", no_supervisor)
 
     root, runner = service
     if validation_basis in {"independent", "independent_missing"}:

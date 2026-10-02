@@ -15,10 +15,42 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from loopx.collaboration_mcp import _pinned_release_environment, _python_module_command
+from loopx.collaboration_mcp import Delegations, _pinned_release_environment, _python_module_command
 from test_local_delegation import demo, service as delegation_service
 
-service = delegation_service
+def reusable_service(runner):
+    return Delegations(runner.root, runner.registry, runner.goal_id, runner.agent_id,
+                       runner.config, reuse_preview=True)
+
+
+@pytest.fixture
+def service(delegation_service):
+    root, runner = delegation_service
+    reused = reusable_service(runner)
+    yield root, reused
+    reused._preview_transport.close()
+
+
+def test_mcp_registration_explicitly_selects_reusable_service(service, monkeypatch):
+    from loopx import collaboration_mcp as collaboration
+
+    root, runner = service
+    captured = []
+    register = collaboration.register_delegation_tools
+
+    def capture(server, delegations):
+        captured.append(delegations)
+        register(server, delegations)
+
+    monkeypatch.setattr(collaboration, "register_delegation_tools", capture)
+    collaboration.create_server(runner.root, runner.registry, runner.goal_id,
+                                runner.agent_id, root / "lead", runner.config)
+    assert len(captured) == 1 and captured[0]._preview_transport is not None
+    try:
+        assert captured[0].inspect("analysis") == runner.inspect("analysis")
+        assert captured[0]._preview_transport._process is not None
+    finally:
+        captured[0]._preview_transport.close()
 
 
 def test_real_mcp_session_rereads_changed_validator_without_effects(service):
@@ -226,8 +258,9 @@ def test_real_source_edit_reloads_python_module_and_environment(tmp_path):
 def test_concurrent_services_preserve_registry_runtime_and_workspace_partition(service, tmp_path, request, monkeypatch):
     root, first = service
     second_root, second = delegation_service.__wrapped__(
-        tmp_path / "second", SimpleNamespace(param=request.node.callspec.params["service"]), monkeypatch
+        tmp_path / "second", SimpleNamespace(param=request.node.callspec.params["delegation_service"]), monkeypatch
     )
+    second = reusable_service(second)
     expected = [runner.inspect("analysis") for runner in (first, second)]
     before = [demo.canonical_tasks(candidate) for candidate in (root, second_root)]
     try:

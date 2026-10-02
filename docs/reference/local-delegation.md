@@ -174,7 +174,11 @@ reporting `turn_blocked`. The observation starts no host, Turn journal or quota 
 Normal quota selection may still admit unrelated eligible work; this preflight
 never substitutes another Todo.
 
-Repeated inspections in one long-lived `Delegations` service reuse at most one
+The long-lived collaboration MCP server explicitly opts into preview reuse.
+One-shot CLI and per-request Goal Chat services retain the original fresh CLI
+subprocess; they do not start a preview supervisor or pay its cleanup cost.
+This is an internal entrypoint-lifetime choice, not a user setting. Repeated
+inspections in that long-lived `Delegations` service reuse at most one
 fixed-workspace, read-only Python CLI worker. The existing TypeScript Host owner
 supervises that worker: each preview retains its 60-second request deadline;
 timeout, cancellation, malformed output and parent EOF stop its process group
@@ -195,10 +199,13 @@ including the existing leased Host supervisor's current-execution readback,
 renewal and nested-process cleanup. Lease-bearing commands never enter the
 preview worker; preview reuse grants no lease or execution authority.
 This is an internal transport change, not a new capability setting, execution
-grant or UI source of truth. A one-shot CLI inspection still pays cold startup;
+grant or UI source of truth. A one-shot CLI inspection still pays its original cold startup;
 a warm-service measurement is not evidence of a faster cold CLI.
 
-中文：长驻 `Delegations` 服务的连续预检最多复用一个固定工作区的只读 Python CLI
+中文：长驻 collaboration MCP server 显式启用预检复用；一次性 CLI 和每个请求新建
+服务的 Goal Chat 保留原 fresh CLI subprocess，不启动预检监督进程，也不承担其清理
+成本。这只是入口生命周期选择，不新增用户配置。长驻 `Delegations` 服务的连续预检
+最多复用一个固定工作区的只读 Python CLI
 进程；既有 TS Host owner 负责生命周期。单次预检仍有 60 秒截止时间，超时、取消、
 非法输出或父端 EOF 后，先确认进程组停止，再返回可核验失败；若无法确认清理，
 不给预检结果，也不自动回退或重试。POSIX 按进程组清理，Windows 保留既有的
@@ -211,7 +218,7 @@ best-effort 进程树边界。
 总寿命 5 分钟；执行和恢复沿用一次性 CLI，包括既有租约 Host 的当前执行读回、
 续期和嵌套进程清理。带租约的命令不进入预检 worker，预检复用不授予租约或执行
 权限。这不增加配置、授权或 UI 权威。
-一次性 CLI 仍承担冷启动，热服务的加速不能冒充冷 CLI 的加速。
+一次性 CLI 仍承担原来的冷启动，热服务的加速不能冒充冷 CLI 的加速。
 
 The managed Effect launcher also preloads a small TypeScript module before the
 server's static imports to enable [Node's native compilation cache](https://nodejs.org/api/module.html#module-compile-cache). The default
@@ -276,6 +283,14 @@ continuous-service slice, use the following calibration profile:
   accepts a bounded startup cost only when the sequence still saves time; report
   cold median/max and the break-even sequence alongside the warm result. A
   consumer that only inspects once must be assessed as a cold consumer.
+
+CLI and Goal Chat are single-use consumers of this service: verify their real
+entrypoints keep the original subprocess and full readback, separately from the
+MCP repeated-call profile. Do not apply continuous-service gains to HTTP/CLI
+requests or introduce a cross-request authority cache to obtain warm samples.
+
+中文：CLI 和 Goal Chat 是单次消费者，须另验真实入口沿用原 subprocess 与完整读回；
+不能把 MCP 连续调用的收益套到 HTTP/CLI，或为制造热样本引入跨请求权限缓存。
 
 These small-sample median/max checks qualify this transport-policy slice only;
 they establish neither a percentile SLO nor sustained R2, model, installation,
@@ -547,15 +562,19 @@ directory cannot authorize a different execution destination. Commands without
 a run-once project retain their invocation-directory boundary. This corrects
 the former ambient-directory dependency; it does not change workspace rules,
 binding grants or acceptance. Structured-handler tests exercise the same owner
-from another service directory and concurrent independent registries, but the
-production preview still uses its pinned subprocess and existing timeout.
-Those tests are not evidence that process reuse or the latency target has shipped.
+from another service directory and concurrent independent registries. Production
+transport selection follows caller lifetime as documented above: short-lived
+callers keep the pinned one-shot subprocess; the long-lived MCP server explicitly
+reuses its supervised preview worker. Both retain the existing timeout. Functional
+parity alone does not establish latency qualification or installed adoption.
 
 中文：原工作区 guard 按 `turn run-once` 的显式 `--project` 校验，包括随后 scheduler
 的决策重读；合格的调用者目录不能授权另一个执行目标。没有 run-once project 的命令
 保留调用目录边界。这修复原先对进程目录的隐式依赖，不改工作区规则、binding grant
-或验收。结构化 handler 测试从不同服务目录、并发独立注册表调用同一 owner；生产预览
-仍使用固定 release 子进程和原超时保护，测试通过不代表进程复用或耗时目标已交付。
+或验收。结构化 handler 测试从不同服务目录、并发独立注册表调用同一 owner。生产传输
+按上文的调用者生命周期选择：短生命周期调用者保留固定的一次性子进程，长生命周期
+MCP 服务显式复用受监督的预览 worker；两者都保留原超时保护。功能一致性通过本身
+不代表耗时达标或已安装采用。
 
 Inspection and its Turn preview load their existing command registrars, not
 unrelated CLI owners. One inspection reuses only the executable TS source
