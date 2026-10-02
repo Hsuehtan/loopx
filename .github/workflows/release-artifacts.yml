@@ -306,6 +306,7 @@ jobs:
               "loopx",
               "loopx-benchmark",
               "loopx-doc-registry",
+              "loopx-performance-diagnosis",
               "loopx-pr-program",
               "loopx-pr-review",
               "loopx-project",
