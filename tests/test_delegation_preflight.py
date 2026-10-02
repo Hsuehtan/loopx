@@ -24,6 +24,43 @@ from test_local_delegation import demo, service as delegation_service
 service = delegation_service
 
 
+@pytest.mark.parametrize("turn_command", ["run-once", "decision"])
+def test_turn_decision_preserves_goal_instance_and_host_workspace_facts(
+    tmp_path, monkeypatch, turn_command
+):
+    """Neither source identity nor destination may be lost during composition."""
+    from loopx.cli_commands import turn_decision
+
+    observed = []
+    goal_ref = {
+        "goal_id": "fixture-goal",
+        "goal_instance_id": "ginst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    }
+    args = SimpleNamespace(
+        goal_id="fixture-goal", agent_id="fixture-agent",
+        project=tmp_path, turn_command=turn_command, available_capabilities=[],
+    )
+
+    def capture(_status, **kwargs):
+        observed.append(kwargs)
+        return {"read_only": True}
+
+    monkeypatch.setattr(turn_decision, "build_live_quota_should_run_decision", capture)
+    decide = turn_decision._build_turn_decision(
+        args, registry_path=tmp_path / "registry.json",
+        runtime_root=tmp_path / "runtime", status_payload={},
+        scheduler_execution_context={}, operator_inbox_urgency_projector=lambda **_: {},
+        goal_ref=goal_ref,
+    )
+    assert decide(requested_action_todo_id="todo_fixture0001") == {"read_only": True}
+    assert len(observed) == 1
+    assert observed[0]["goal_ref"] is goal_ref
+    assert observed[0]["workspace_path"] == (
+        tmp_path.resolve() if turn_command == "run-once" else None
+    )
+    assert observed[0]["requested_action_todo_id"] == "todo_fixture0001"
+
+
 def _structured_turn_preview(runner, binding, *arguments, timeout=60):
     """Exercise the original owner from a service cwd, without global overrides."""
     from loopx.cli_commands.turn import handle_turn_command
