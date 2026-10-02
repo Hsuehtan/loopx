@@ -238,6 +238,10 @@ contents and separates Node versions. The original source fingerprint, startup
 authentication, readiness checks and request deadlines remain authoritative.
 Cache fill has a first-load cost, and code cache is written on normal Node exit;
 measure first fill separately from populated-cache restart and resident reuse.
+Shutdown drains requests and flushes pending compilation before retiring its
+locator. The locator's existing stop acknowledgement must not let temporary
+namespace cleanup race a later exit-time cache write; request deadlines and
+shutdown authorization are unchanged.
 An unavailable, non-private or symlinked default cache leaves normal source
 execution working, without changing its permissions. Existing explicit
 `NODE_COMPILE_CACHE` behavior is retained. Set `NODE_DISABLE_COMPILE_CACHE=1`
@@ -250,7 +254,9 @@ module load alone does not qualify whole-CLI latency or requester adoption.
 Node 原生编译缓存。默认目录位于既有私有临时 Effect namespace；只保存编译后的
 代码，不保存 Goal 数据、判决或权限。Node 校验模块内容并隔离 Node 版本；原源码
 指纹、启动鉴权、就绪校验和请求截止时间保持权威。首次填充有成本，代码缓存在
-Node 正常退出时写出；首次填充、已有缓存的重启和常驻复用须分别测量。默认缓存
+Node 正常退出时写出；首次填充、已有缓存的重启和常驻复用须分别测量。
+关闭时先排空请求、刷出待写的编译缓存，再撤销定位文件，避免既有停止回执允许
+临时目录清理后，退出阶段又写入缓存；不延长请求期限或改变关闭授权。默认缓存
 不可用、非私有或为符号链接时，继续执行原源码，不修改既有权限。保留显式
 `NODE_COMPILE_CACHE` 行为；`NODE_DISABLE_COMPILE_CACHE=1` 可关闭编译复用，
 包括精确 V8 coverage 场景；默认 preload 在 `NODE_V8_COVERAGE` 下不启用缓存。

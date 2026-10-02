@@ -1,5 +1,6 @@
 import { writeSync } from "node:fs";
 import { createServer, type Socket } from "node:net";
+import { flushCompileCache } from "node:module";
 import { chmod, readFile, rm, type FileHandle } from "node:fs/promises";
 
 import type { JsonObject } from "./effect_program.ts";
@@ -259,6 +260,10 @@ server.on("close", () => {
     if (pendingRequests > 0) {
       await new Promise<void>((resolve) => { resolveDrain = resolve; });
     }
+    // Retiring the locator lets a fixture remove the private namespace. Flush
+    // compiled code first, so Node's exit does not recreate a cleaned cache.
+    // This optional optimization never decides whether shutdown is permitted.
+    flushCompileCache();
     await withFileMutationLock(infoPath, async () => {
       let published: Record<string, unknown>;
       try {

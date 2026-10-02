@@ -187,9 +187,9 @@
         "loopx/control_plane/quota/void_commit.py::commit_quota_slot_void"
       ],
       "consumer_sites": [
+        "loopx/control_plane/quota/ledger_readback.py::net_quota_slot_spend",
         "loopx/control_plane/quota/settlement_readback.ts::readQuotaSettlement",
-        "loopx/control_plane/quota/slot_accounting.py::_latest_unspent_turn_settlement_run",
-        "loopx/control_plane/quota/slot_accounting.py::net_quota_slot_spend"
+        "loopx/control_plane/quota/slot_accounting.py::_latest_unspent_turn_settlement_run"
       ],
       "effect_boundary": "loopx/control_plane/quota/accounting_artifact_transaction.ts::commitQuotaAccountingArtifactTransaction",
       "authority_role": "quota_accounting_ledger",

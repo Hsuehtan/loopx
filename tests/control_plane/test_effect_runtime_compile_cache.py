@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import time
 from types import SimpleNamespace
@@ -107,3 +108,59 @@ def test_compile_preload_is_part_of_the_source_fingerprint(tmp_path: Path, monke
     original = effect_runtime._runtime_fingerprint()
     preload.write_text("export const version = 2;\n", encoding="utf-8")
     assert effect_runtime._runtime_fingerprint() != original
+
+
+def test_shutdown_flushes_compilation_before_retiring_the_locator(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A retired locator lets its fixture clean up; exit must not write later."""
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700)
+    monkeypatch.setattr(effect_runtime, "_runtime_dir", lambda: runtime)
+    for name in ("NODE_COMPILE_CACHE", "NODE_DISABLE_COMPILE_CACHE", "NODE_V8_COVERAGE"):
+        monkeypatch.delenv(name, raising=False)
+    delay = tmp_path / "hold-exit.mjs"
+    release = tmp_path / "release-exit"
+    delay.write_text(
+        "import { existsSync } from 'node:fs';\n"
+        "const exit = process.exit.bind(process);\n"
+        "const release = new URL('./release-exit', import.meta.url);\n"
+        "process.exit = code => {\n"
+        "  const poll = setInterval(() => {\n"
+        "    if (existsSync(release)) { clearInterval(poll); exit(code); }\n"
+        "  }, 10);\n"
+        "  setTimeout(() => exit(code), 5000).unref();\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NODE_OPTIONS", "--import=" + delay.as_uri())
+    monkeypatch.setenv("LOOPX_EFFECT_RUNTIME_IDLE_MS", "60000")
+    children = []
+    original_popen = effect_runtime.subprocess.Popen
+
+    def capture(args, *rest, **kwargs):
+        child = original_popen(args, *rest, **kwargs)
+        if "--info" in args:
+            children.append(child)
+        return child
+
+    monkeypatch.setattr(effect_runtime.subprocess, "Popen", capture)
+    try:
+        effect_runtime.effect_runtime_result("runtime.ping", {})
+        assert len(children) == 1
+        assert effect_runtime.restart_effect_runtime()["status"] == "stopped"
+        assert children[0].poll() is None, "the fixture must expose the pre-exit interval"
+        assert any(p.is_file() for p in (runtime / "compile-cache").rglob("*")), (
+            "cache must be flushed before the locator authorizes directory cleanup"
+        )
+        # Only this newly created fixture namespace is removed, while the
+        # owned Node child is still held before exit. No late cache may revive it.
+        shutil.rmtree(runtime)
+        release.touch()
+        children[0].wait(timeout=5)
+        assert not runtime.exists(), "exit-time cache writes must not recreate the namespace"
+    finally:
+        effect_runtime.restart_effect_runtime()
+        release.touch()
+        for child in children:
+            child.wait(timeout=5)
