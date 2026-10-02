@@ -11,7 +11,7 @@ import pytest
 from loopx.cli import main as cli_main
 from loopx.cli_commands import turn as turn_command
 from loopx.cli_commands import turn_decision
-from loopx.cli_commands import turn_rendering, turn_todo_writeback
+from loopx.cli_commands import turn_rendering, turn_run_once, turn_todo_writeback
 from loopx.control_plane.turn_driver import executor
 from loopx.control_plane.turn_driver import turn_journal_runtime
 
@@ -338,20 +338,11 @@ def test_inspect_journal_cli_branches_before_live_or_write_paths(
         raise AssertionError("inspect-journal reached a live or write path")
 
     for name in (
-        "build_live_quota_should_run_decision",
         "build_loopx_turn_plan",
         "build_turn_envelope",
     ):
         monkeypatch.setattr(turn_command, name, unexpected_call)
-    monkeypatch.setattr(executor, "run_loopx_turn_once", unexpected_call)
-    from loopx.control_plane.turn_driver import codex_cli
-    monkeypatch.setattr(codex_cli, "run_codex_cli_host", unexpected_call)
-    # Execution-only dependencies are imported inside the executing Turn path.
-    # Patch their source modules so this still guards the real delayed imports.
-    from loopx import quota, state_refresh
-
-    monkeypatch.setattr(quota, "spend_quota_slot", unexpected_call)
-    monkeypatch.setattr(state_refresh, "refresh_state_run", unexpected_call)
+    monkeypatch.setattr(turn_run_once, "execute_turn_run_once", unexpected_call)
     # The shared decision owner now performs the live reads this command used to
     # resolve itself, so the guard has to patch them where they live. Patching
     # the old ``turn_command`` names would fail loudly here instead of proving

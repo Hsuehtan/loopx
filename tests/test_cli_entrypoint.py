@@ -240,6 +240,7 @@ assert "loopx.cli" not in sys.modules
 assert {registration_module!r} in sys.modules
 assert "loopx.cli_commands.benchmark_dispatch" not in sys.modules
 assert "loopx.capabilities.content_ops.cli" not in sys.modules
+assert "loopx.cli_commands.turn_run_once" not in sys.modules
 if {registration_module!r} != {handler_module!r}:
     assert {handler_module!r} not in sys.modules
 """
@@ -420,12 +421,15 @@ def test_selected_admin_preview_matches_full_cli_without_writes(
 @pytest.mark.parametrize("module", ["loopx.entrypoint", "loopx.cli"])
 @pytest.mark.parametrize("healthy", [True, False])
 def test_doctor_dispatch_preserves_owner_flags_and_failure(
-    module: str, healthy: bool,
+    module: str, healthy: bool, tmp_path: Path,
 ) -> None:
+    registry = tmp_path / "registry.json"
+    runtime_root = tmp_path / "runtime"
     script = f"""
 import contextlib
 import io
 import json
+from pathlib import Path
 
 import loopx.cli_commands.doctor as owner
 from {module} import main
@@ -437,10 +441,13 @@ def collect(**kwargs):
 owner.collect_doctor = collect
 output = io.StringIO()
 with contextlib.redirect_stdout(output):
-    code = main(["--format", "markdown", "doctor", "--format", "json",
+    code = main(["--registry", {str(registry)!r}, "--runtime-root", {str(runtime_root)!r},
+                 "--format", "markdown", "doctor", "--format", "json",
                  "--deep", "--installation-only"])
 assert code == {0 if healthy else 1}
-assert observed == [{{"deep": True, "agent_type": None, "installation_only": True}}]
+assert observed == [{{"deep": True, "agent_type": None, "installation_only": True,
+                    "registry_path": Path({str(registry)!r}),
+                    "runtime_root_override": {str(runtime_root)!r}}}]
 assert json.loads(output.getvalue()) == {{"ok": {healthy!r}, "scope": "installation_only"}}
 """
     completed = run_isolated_script(script)

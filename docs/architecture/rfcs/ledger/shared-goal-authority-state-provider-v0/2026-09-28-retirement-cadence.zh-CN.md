@@ -202,14 +202,37 @@ Todo 写入时的业务校验，也不重审完成／deferred 历史的授权。
 仍触及既有 `todo.succession.project` RPC 响应预算；修复后的合同 API 能读取该集合，
 不代表剩余整命令包体边界已完成验收。
 
-B 下一步聚焦冻结 source／runtime profile 下的 SQLite 准入：重新跑已有 reference
-容量轴，对齐并发／恢复／consumer lag 证据，并核对保留的自然时间 soak 适用性。
+B 按主 RFC 7.2 区分有界 provider PR、可恢复的小范围开发者试用和发布默认值。
+提议的绝对延迟预算不否决每次合入或试用：在匹配负载下比较当前受支持版本，
+公开绝对增量与相对变化，并核对消费者影响。正确性、原始回执、完整 metadata 和
+可恢复迁移仍是硬要求。冻结报告保留原预算及失败／缺失项，调整决策不改写旧证据。
+
+[PR #5251](https://github.com/loopx-project/loopx/pull/5251) 在已有 strict JSON codec
+owner 中优化历史数据物化，保留持久化 canonical 编码，减少历史投影中不可变值的
+重复分配。旧正式报告各自绑定 source：作者报告 `d767b06f1` 为 8 通过／6 失败／10
+缺失，`02d3dee83` 为 14 通过／0 失败／10 缺失；这些结果不验证后续 head，也不补齐
+缺失轴。下一步核对变更路径的配对测量与真实 provider／调用方，再对齐并发、恢复、
+consumer lag 及保留的自然时间 soak 适用性。
 比较 runner 原先要求历史重试返回 conflict，与已合并 #5169 矛盾：相同完整意图应
 返回原 applied revision／cursor。现在核对原结果，分别拒绝 projection／event／receipt
 漂移，在重试前后分页验证全部历史，不保留所有预期快照。不变量失败就不发布成功
 报告；这些检查放在既有计时窗口之外。这修复的是验证工具，不代表 provider 故障、
 D2 通过或默认切换。#4224 已报告在 `e98191faa` 上于 9 月 14 日开始 soak，仍需最终
 结果及对当前候选的适用性证据，不能称为未开始，也不能仅因无关 source 修订就重启计时。
+
+在 source `613180ae` 上，64 KiB 匹配负载的 macOS 正式测量有 13 项通过、1 项失败、
+11 项缺失：冷 CLI status p95 为 4.39 秒，超过 2 秒预算。Linux 的仅存储正式测量
+有 12 项通过、13 项缺失；小规模 CLI 演练不能替代正式 CLI 轴。按需调用的
+`performance-diagnosis` 已在隔离目标上采集 Python 墙钟、独立 Node CPU 和 Linux
+线程栈。启动、候选扫描和等待仍是待验证假设，需复跑未插桩的原负载；不能用
+profile 权重替换这项准入失败。
+
+[#5283](https://github.com/loopx-project/loopx/pull/5283) 是相邻的只读 delegation
+预检优化，不是 provider 实现。当前进程复用候选报告了 File/SQLite 配对暖调用收益，
+同时披露冷启动成本；保留并推进精确 head 评审、安装读回和真实请求方采用。
+重复调用消费者与上述单次冷 status 分别验收。沿原 TS／CLI owner 读取当前决策，
+固定 Python worker 只作传输，不缓存权限或验收结果；TS 替代与最后调用方验证完成
+后再退役 Python 规则，不能凭进程复用就宣称退役或 SQLite 准入。
 
 已有 TS 替代且真实受影响调用方验证完成的 Python 重复决策，可以按最后调用方独立
 退役；整条 Markdown writer 删除仍需 C 的新 Goal／升级／恢复出口。消费者完整
