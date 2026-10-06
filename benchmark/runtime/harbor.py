@@ -56,7 +56,7 @@ class BenchmarkCodex(CodexOffline):
         scheduler_timeout_sec=5080,
         replan_after_todos=None,
         replan_after_turns=None,
-        task_entry="seeded-todo",
+        task_entry=None,
         planning_timeout_sec=300,
         turn_envelope=False,
         **kwargs,
