@@ -15,7 +15,14 @@ loopx todo list --goal-id example-goal --todo-id todo_work
 loopx todo project-markdown --goal-id example-goal --execute
 ```
 
-确实没有后继时才使用 `--no-follow-up`。有租约的工作还需要当前
+确实不需要后继时才使用 `--no-follow-up`。重规划时，应对照原授权目标和当前证据
+检查未达验收项：若仍有合理的范围内下一步，就继续或重规划，无需等待预先分配
+的 successor。Todo 队列为空本身不会收窄授权。否则说明为何已无合理的范围内下一步，
+保留未达要求，不把它们说成已完成；也不为了保持活跃而造任务、扩大授权或耗尽预算。
+
+这是共享 replan packet 中的模型决策指引，会进入精简 CLI 和 host envelope。它没有
+新增自然语言验收的机器判官，不改变 lifecycle 准入，也不要求每个完成的 Todo 都建后继。
+有租约的工作还需要当前
 `--task-lease-idempotency-key` 和 `--task-lease-expected-version`；用户确认不提供
 租约或 lifecycle grant。Chat 重试同一个失败 proposal；stale proposal 需要重新预览，
 不能换一个 operation id 绕过审核。
