@@ -395,7 +395,7 @@ def test_remaining_phase_time_caps_later_host_windows(planning_env, monkeypatch)
 
 
 @pytest.mark.parametrize("status", ["open", "blocked", "done", "deferred"])
-def test_seeded_followup_uses_real_todo_delta_without_reviving_terminal_work(
+def test_seeded_task_acceptance_survives_phase_update_without_reviving_terminal_work(
     planning_env, tmp_path, monkeypatch, status
 ):
     import contextlib
@@ -424,6 +424,9 @@ def test_seeded_followup_uses_real_todo_delta_without_reviving_terminal_work(
         agent._phase_number = 1
         await agent._seed_phase(None, cwd=planning_env["LOOPX_PROJECT"])
         original = agent._seeded_todo_id
+        first = await cli(None, ["todo", "list", "--goal-id", "planning-goal",
+                                "--role", "agent", "--todo-id", original])
+        initial_text = first["todos"][0]["text"]
         transition = (["complete", "--no-follow-up", "--note", "Synthetic task independently validated; no remaining work"]
                       if status == "done" else ["update", "--status", status])
         if status == "deferred":
@@ -434,12 +437,16 @@ def test_seeded_followup_uses_real_todo_delta_without_reviving_terminal_work(
         await agent._seed_phase(None, cwd=planning_env["LOOPX_PROJECT"])
         listed = await cli(None, ["todo", "list", "--goal-id", "planning-goal", "--role", "agent"])
         todos = {t["todo_id"]: t for t in listed["todos"]}
-        # Read back the exact minimal seed through the real Todo owner. Phase
-        # updates must not add task-decomposition advice to the benchmark task.
+        # Both the first task and a later phase keep the native task's full
+        # acceptance in scope, without preplanning a successor or reviving work.
         assert todos[agent._seeded_todo_id]["text"] == (
-            "[P0] Execute benchmark phase 2. Read the exact "
-            "current task from /opt/loopx-benchmark/control/task-phase-002.md; "
-            "inspect the workspace, implement and validate it."
+            "[P0] Complete the task in /opt/loopx-benchmark/control/task-phase-002.md. "
+            "Inspect the workspace, implement and validate against the task's full "
+            "requirements and acceptance criteria. Keep unmet requirements explicit "
+            "when judging task completion."
+        )
+        assert initial_text == todos[agent._seeded_todo_id]["text"].replace(
+            "task-phase-002.md", "task-phase-001.md"
         )
         if status in {"open", "blocked"}:
             assert agent._seeded_todo_id == original and len(todos) == 1
