@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 from ..quota.turn_envelope import turn_envelope_action_signature_document
+from .driver import selected_turn_todo
 
 LOOPX_TURN_HOST_REQUEST_SCHEMA = "loopx_turn_host_request_v0"
 LOOPX_TURN_RESULT_SCHEMA = "loopx_turn_result_v0"
@@ -88,6 +89,14 @@ def extract_turn_authority(request: Mapping[str, Any]) -> dict[str, Any]:
         "write_scope": list(write_scope) if isinstance(write_scope, list) else [],
         "workspace_guard": _mapping(boundary.get("workspace_guard")),
     }
+    selected = selected_turn_todo(envelope)
+    if selected:
+        # Both the declaration and a possible exact-text alias are signed.
+        # Do not replace a complete task with the shorter primary-action label.
+        if selected.get("text_ref") == "action.recommended_action":
+            selected = {**selected, "text": action.get("recommended_action")}
+            selected.pop("text_ref")
+        authority["selected_todo"] = selected
     unavailable = _mapping(_mapping(envelope.get("contract_capsule")).get("unavailable_context"))
     if unavailable:
         authority["unavailable_context"] = unavailable

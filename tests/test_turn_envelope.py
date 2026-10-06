@@ -493,7 +493,7 @@ def test_turn_envelope_preserves_signed_adaptive_orchestration_contract() -> Non
     ) == turn_envelope_action_signature_document(envelope)
 
 
-def test_three_long_child_briefs_stay_within_turn_envelope_budget() -> None:
+def test_three_long_child_briefs_preserve_required_reads_with_budget_warning() -> None:
     long_objective = "Validate " + "evidence " * 55
     items = [
         {
@@ -546,8 +546,10 @@ def test_three_long_child_briefs_stay_within_turn_envelope_budget() -> None:
     assert contract is not None
     assert len(contract["eligible_child_lanes"]) == 3
     assert envelope["action_signature"]["matches"] is True
-    assert envelope["compaction"]["envelope_json_bytes"] < TURN_ENVELOPE_BUDGET_BYTES
-    assert envelope["compaction"]["within_budget"] is True
+    assert any(read.get("source") == "selected_todo" for read in envelope["required_reads"])
+    assert envelope["compaction"]["budget_bytes"] == TURN_ENVELOPE_BUDGET_BYTES
+    assert envelope["compaction"]["warning"]["code"] == "turn_envelope_budget_exceeded"
+    assert envelope["compaction"]["within_budget"] is False
 
 
 def test_turn_envelope_full_decision_preserves_codex_app_profile() -> None:
@@ -715,7 +717,7 @@ def test_turn_envelope_omits_oversized_scheduler_argv_instead_of_truncating() ->
     }
 
 
-def test_turn_envelope_stays_actionable_during_scheduler_reset() -> None:
+def test_turn_envelope_preserves_distinct_selected_text_during_scheduler_reset() -> None:
     source = _full_decision()
     todo_text = (
         "[P1] Continue host-neutral Agent CLI orchestration with start and resume, "
@@ -812,10 +814,8 @@ def test_turn_envelope_stays_actionable_during_scheduler_reset() -> None:
     envelope = build_turn_envelope(source)
     compact_app = envelope["scheduler"]["codex_app"]
 
-    assert envelope["action"]["selected_todo"]["text_ref"] == (
-        "action.recommended_action"
-    )
-    assert "text" not in envelope["action"]["selected_todo"]
+    assert envelope["action"]["selected_todo"]["text"] == source["selected_todo"]["text"]
+    assert "text_ref" not in envelope["action"]["selected_todo"]
     assert compact_app["ack_cli_args"] == ack_cli_args
     assert "failure_cli_args" not in compact_app
     assert compact_app["failure_cli_args_detail_ref"] == {

@@ -239,7 +239,7 @@ function identityState(
   return [complete, complete && new Set(observed).size === 1];
 }
 
-function selectedTurnTodoId(envelope: JsonObject): string | null {
+export function selectedTurnTodoId(envelope: JsonObject): string | null {
   const orchestration = asObject(envelope.task_orchestration_contract);
   const primaryTodoId = typeof orchestration.primary_todo_id === "string"
     ? orchestration.primary_todo_id.trim()
