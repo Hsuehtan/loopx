@@ -353,13 +353,13 @@ def test_baseline_and_treatment_use_same_harbor_entry(tmp_path):
 
 @pytest.mark.parametrize("existing", [False, True])
 @pytest.mark.parametrize("turns", [None, 2])
-def test_phase_bootstrap_uses_current_public_cli(tmp_path, monkeypatch, existing, turns):
+def test_explicit_seeded_phase_bootstrap_uses_current_public_cli(tmp_path, monkeypatch, existing, turns):
     pytest.importorskip("harbor")
     from benchmark.runtime.harbor import BenchmarkCodex
     from loopx.cli import build_parser
 
     agent = BenchmarkCodex(logs_dir=tmp_path, model_name="openai/fixture",
-                           replan_after_turns=turns)
+                           replan_after_turns=turns, task_entry="seeded-todo")
     field = "replan_after_effective_turns" if turns else "replan_after_completed_todos"
     calls = []
 
