@@ -94,6 +94,34 @@ still require a separately pinned experiment. Capture grants no additional
 read/write/lease authority. Keep captures private; disable the option in the
 next run and use ordinary file management to remove unneeded records.
 
+Selected work and its full requirements have different projections. On an
+admitted delivery Turn with a selected Todo, the envelope now includes an exact
+`todo list --goal-id … --todo-id …` command in signed `required_reads`, bound to
+the source registry/runtime when available. Run it before work and require one
+matching active Todo with current status/claim; missing, ambiguous or changed
+work requires a fresh guard. The existing reader returns full source text even
+when the quota summary was shortened. The read is current, not a snapshot bound
+to the earlier selection; it grants no claim, lease or mutation authority.
+
+This is a default change for delivery envelopes, including Codex CLI and shared
+host adapters. Held, selection-only, replan and governed-capability lanes do not
+acquire this extra read. Full quota summaries stay compact. Shared adapters now
+retain selected Todo context; text aliases require exact equality, never a
+case-folded or truncated-prefix match. Supplied selected text survives envelope
+serialization intact. Hosts must honor `required_reads`; the envelope does not
+produce a receipt proving that the model read or followed them. No new global
+Goal acceptance gate or frontend/Lark operation is introduced; their existing
+Todo detail route remains the source readback. Completing this work cannot by
+itself establish Goal completion.
+
+中文：允许交付且已选 Todo 的 Turn 短包，现在默认带有签名的精确 Todo 全文读取
+指令，并保留来源 registry/runtime。执行工作前须读取、核对唯一的活跃任务及当前
+状态/claim；缺失、歧义或变化须重新 guard。读取的是当前原文，不是旧 selection 的
+版本快照，也不授予 claim、lease 或写权限。等待、待选择、replan 和受治理 capability
+分支不追加此读取。共享宿主保留选中任务；正文只在完全相同时复用推荐动作，不能
+将大小写折叠或截断前缀视为等价。这里验证传输与读取入口，不证明模型已读/已遵循，
+也不新增 Goal 全局完成门禁。前端/Lark 继续使用现有 Todo 详情路径。
+
 The envelope flag selects a projection of the full decision. The original v0
 contract left the default `quota should-run` output unchanged; the
 [PR-05 migration](protocol-action-packet-decision-v0.md) omits

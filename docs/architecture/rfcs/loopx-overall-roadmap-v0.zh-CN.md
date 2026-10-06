@@ -397,6 +397,7 @@ P2 增加 GQ16 的认证跨主机恢复。先做 packaged App 与独立 CLI 回�
 
 ### R1：可靠的团队计划提交
 
+- **要求的连续性：** selected work 只是当前焦点，不能替代整个 Goal 的未完成要求。先保证 plan→selection→Turn→host 可精确读取 Todo 全文，再由 R4 将结构化验收条件关联到持久、版本化的要求。摘要、局部工作成功或非空证据引用均不能证明完整目标交付。
 - **真实入口与 owner：** `ChatActionService`、受治理 proposal、canonical Todo writer，以及前端的确认/回读；Lark 有对应入口时使用同一服务。
 - **先复现：** F1–F4；另外覆盖相同 text 的不同 lane、已有 Todo 在 retry 前完成/修改、两个确认并发、receipt 写入后响应丢失。
 - **最小完整修改：** 对计划字段逐个明确是执行约束、持久验收引用还是 advisory。priority 通过现有 Todo 合同保留；quota/stop 只能消费已有 policy owner，未支持的强制项须在确认前报不支持，不能只存一份 JSON。保留 lane→Todo→acceptance 的关系。
@@ -589,6 +590,7 @@ Lark 传输 owner，本切片不再重复修改它。
 
 ### R4：共享目标对齐与演化
 
+- **当前工作与完整义务：** 遵循 [alignment RFC §3.7](shared-goal-alignment-and-governed-amendment-v0.zh-CN.md#37-当前工作与-goal-要求)。跨重规划、压缩、重启和 Agent 交接保留 criterion 身份与覆盖关系；只有授权且留痕的 amendment 可改变承诺。经 R5 复用既有 Goal acceptance 与 Todo owner。全局收口前验证证据内容、范围和时效，局部 `no_followup` 不足以结清目标。当前任务传输前置之外的部分仍未完成；模型实际采用的资格归 S11。
 - **Owner：** alignment RFC Stage 3–5；TS Goal/work-graph owner。
 - **先收口：** `intent_basis` 仅是现有 source-facts digest；保留兼容 reader，真正引入 intent revision 时单独版本化并盘点 producer/reader。不得改名后假装历史回执拥有新语义。
 - **交付次序：** 明确 root intent/permissions/acceptance/stop 的 authority；先做保持 intent 的一个 work-graph commit class。普通 Todo 编辑仍走现有 owner，不能给每次 add 强加 amendment 流程。跨共享承诺修改才消费有范围 policy、必要的 verifier、精确 CAS 与 lease-impact disposition。
