@@ -129,7 +129,7 @@ def test_auto_space_is_lazy_and_reused_for_text_and_image(configured, monkeypatc
     calls = []
     def run(_executable, script, **_kwargs):
         calls.append(script)
-        if "taskSpace('LoopX public-source reader')" in script:
+        if 'taskSpace("LoopX public-source reader ' in script:
             return space_response(19, stderr=stderr)
         if "screenshot(" in script:
             path = tmp_path / "image.png"
@@ -149,12 +149,20 @@ def test_auto_space_is_lazy_and_reused_for_text_and_image(configured, monkeypatc
 def test_separate_reader_process_state_owns_separate_spaces(configured, monkeypatch):
     auto_config(monkeypatch)
     config = reader.ReaderConfig.from_environment()
-    ids = iter([19, 20])
-    monkeypatch.setattr(reader, "_run", lambda *a, **k: space_response(next(ids)))
+    # Model the real factory's name-based reuse, not predetermined distinct ids.
+    spaces = {}
+    def run(_executable, script, **_kwargs):
+        name = json.loads(script.split("taskSpace(", 1)[1].split(");", 1)[0])
+        return space_response(spaces.setdefault(name, 19 + len(spaces)))
+    monkeypatch.setattr(reader, "_run", run)
     first, second = reader._OwnedSpace(), reader._OwnedSpace()
     assert first.resolve(config).task_space == 19
     assert second.resolve(config).task_space == 20
     assert first.resolve(config).task_space == 19
+    assert first.name != second.name and len(spaces) == 2
+    first.forget_closed()
+    first.resolve(config)
+    assert len(spaces) == 2  # The owner identity remains stable during recovery.
 
 
 @pytest.mark.parametrize("failure", ["user_control", "timeout", "ambiguous_creation"])
@@ -163,7 +171,7 @@ def test_errors_do_not_create_replacement_spaces(configured, monkeypatch, failur
     calls = []
     def run(executable, script, **_kwargs):
         calls.append(script)
-        if "taskSpace('LoopX public-source reader')" in script:
+        if 'taskSpace("LoopX public-source reader ' in script:
             if failure == "ambiguous_creation":
                 raise subprocess.TimeoutExpired(executable, 30)
             return space_response(19)
@@ -173,7 +181,7 @@ def test_errors_do_not_create_replacement_spaces(configured, monkeypatch, failur
     monkeypatch.setattr(reader, "_run", run)
     assert not reader.read_public_url(URL)["ok"]
     assert not reader.read_public_url(URL)["ok"]
-    assert sum("taskSpace('LoopX public-source reader')" in s for s in calls) == 1
+    assert sum('taskSpace("LoopX public-source reader ' in s for s in calls) == 1
 
 
 @pytest.mark.parametrize("stderr", [False, True])
@@ -182,7 +190,7 @@ def test_only_confirmed_missing_owned_space_is_replaced_once(configured, monkeyp
     calls = []
     def run(_executable, script, **_kwargs):
         calls.append(script)
-        if "taskSpace('LoopX public-source reader')" in script:
+        if 'taskSpace("LoopX public-source reader ' in script:
             return space_response(19 if len(calls) == 1 else 20)
         if "taskSpace(19)" in script:
             output = reader.SPACE_MARKER + '{"closed":true}'
@@ -238,7 +246,7 @@ def test_stdio_hosts_create_isolated_spaces_and_clean_up_on_eof(configured, monk
         "import json,os,sys\nfrom pathlib import Path\n" +
         "script=sys.argv[-1]\n" +
         f"with Path({str(log)!r}).open('a') as f: f.write(json.dumps([os.getppid(),script])+'\\n')\n" +
-        "if \"taskSpace('LoopX public-source reader')\" in script:\n" +
+        "if 'taskSpace(\"LoopX public-source reader ' in script:\n" +
         " print('LOOPX_READER_SPACE:'+json.dumps({'id':os.getppid()}),file=sys.stderr)\n" +
         "elif 'finish({keep:[]})' not in script:\n" +
         " print('LOOPX_PUBLIC_SOURCE:'+" + repr(response(extraction()).stdout.split(":", 1)[1]) + ",file=sys.stderr)\n")
@@ -261,7 +269,7 @@ def test_stdio_hosts_create_isolated_spaces_and_clean_up_on_eof(configured, monk
     for pid in hosts:
         scripts = [script for owner, script in calls if owner == pid]
         assert len(scripts) == 4
-        assert sum("taskSpace('LoopX public-source reader')" in s for s in scripts) == 1
+        assert sum('taskSpace("LoopX public-source reader ' in s for s in scripts) == 1
         assert all(f"taskSpace({pid})" in s for s in scripts[1:])
         assert scripts[-1].endswith("if(t.ownership==='agent')await t.finish({keep:[]});")
 

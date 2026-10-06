@@ -17,6 +17,7 @@ import threading
 import time
 import tempfile
 import struct
+import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -81,6 +82,9 @@ class _OwnedSpace:
     """One lazily created space per MCP process; never owns configured spaces."""
 
     def __init__(self) -> None:
+        # Ego's named factory reuses existing agent-owned spaces. A stable
+        # nonce belongs to this MCP host, not to all hosts of this provider.
+        self.name = f"LoopX public-source reader {uuid.uuid4().hex}"
         self.space: int | None = None
         self.executable: str | None = None
         self.creation_attempted = False
@@ -97,7 +101,7 @@ class _OwnedSpace:
                 raise ValueError("reader space creation outcome unknown")
             self.creation_attempted = True
             self.executable = config.executable
-            script = ("const t=await taskSpace('LoopX public-source reader');"
+            script = (f"const t=await taskSpace({json.dumps(self.name)});"
                       f"console.log({json.dumps(SPACE_MARKER)}+JSON.stringify({{id:t.spaceId}}));")
             result = _run(config.executable, script, deadline=deadline)
             values = [line[len(SPACE_MARKER):] for line in (result.stdout + "\n" + result.stderr).splitlines()

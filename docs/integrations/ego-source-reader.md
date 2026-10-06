@@ -7,8 +7,10 @@ Page. It does not replace the Chat Session owner or create a browser,
 model thread, background service, material catalog or permission authority.
 
 Operator setup is explicit. Choose `auto` to lazily create one TaskSpace and its
-initial `p1` per MCP process. This avoids expired fixed ids and keeps concurrent
-hosts on separate Pages. Alternatively, reserve an existing numeric TaskSpace
+initial `p1` per MCP process. Ego's named factory can reuse an existing space,
+so the adapter generates a unique host nonce once and keeps that name throughout
+its lifecycle and confirmed-missing recovery. This avoids expired fixed ids and
+keeps concurrent hosts on separate Pages. Alternatively, reserve an existing numeric TaskSpace
 and Page for this process. Allow only the public-source origins needed for the
 task. Do not reserve a Page
 shared with another process or grant a private account/admin origin. Navigation
@@ -48,7 +50,9 @@ when Ego explicitly reports `task space not found`. Other browser errors,
 verification walls and user-control stops do not create replacements. An
 ambiguous creation receipt fails closed until the operator inspects/restarts the
 host. On normal MCP shutdown or SIGTERM, it finishes only its own created,
-still-agent-owned space. Configured numeric spaces are never finished by the
+still-agent-owned space. SIGTERM cleanup can complete while the stdio server
+still waits for its host to close stdin; callers should also close the pipe when
+stopping the process. Configured numeric spaces are never finished by the
 adapter. Shutdown failures may require operator cleanup; a killed process cannot
 guarantee cleanup. No login/profile selection or browser-control tool is exposed.
 
