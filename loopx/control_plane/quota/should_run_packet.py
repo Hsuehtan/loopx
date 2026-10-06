@@ -1231,6 +1231,7 @@ def _quota_payload_context(prepared: _QuotaDecisionPreparation, route: _QuotaDec
         "goal_id": prepared.safe_goal_id,
         "registry": prepared.status_payload.get("registry"),
         "runtime_root": prepared.status_payload.get("runtime_root"),
+        "goal_state_file": prepared.goal_state_file,
         "quota": route.quota,
         "state": route.state,
         "blocked_action_scope": prepared.boundary_projection_repair.get("blocked_action_scope")

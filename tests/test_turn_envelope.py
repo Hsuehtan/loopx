@@ -133,6 +133,13 @@ def _full_decision() -> dict[str, object]:
                 "delivery_allowed": True,
                 "quiet_noop_allowed": False,
                 "primary_action": "advance one product-path slice",
+                "required_reads": [
+                    {"kind": "repository", "command": "git status --short", "reason": "inspect state"},
+                    {"source": "goal_state", "command": "cat -- /tmp/fixture-goal/state.md",
+                     "reason": "Read the whole Goal intent, acceptance and stops before work/replan."},
+                    {"source": "selected_todo", "command": "loopx --format json todo list --goal-id fixture-goal --todo-id todo_fixture0001",
+                     "reason": "Read full current work requirements before work."},
+                ],
             },
             "cli_channel": {
                 "next_cli_actions": [
@@ -143,13 +150,6 @@ def _full_decision() -> dict[str, object]:
                 "spend_after_validation": True,
                 "spend_policy": "spend once after validated writeback",
             },
-            "required_reads": [
-                {
-                    "kind": "repository",
-                    "command": "git status --short",
-                    "reason": "inspect state",
-                }
-            ],
         },
         "goal_boundary": {
             "adapter": {"kind": "fixture", "status": "connected-read-only"},

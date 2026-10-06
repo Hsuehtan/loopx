@@ -599,7 +599,7 @@ test("all required reads survive compaction and later reads affect the signature
   const render = () => buildTurnEnvelope({payload: source,
     protocol_action_fields: protocolActionFields, scheduler_execution_args: ""});
   const result = render();
-  assert.deepEqual((result.required_reads as JsonObject[]).filter(x => x.source !== "selected_todo").map(x => x.command), reads.map(x => x.command));
+  assert.deepEqual((result.required_reads as JsonObject[]).map(x => x.command), reads.map(x => x.command));
   assert.equal((result.compaction as JsonObject).budget_bytes, 8_192 + 1_536);
   assert.equal((result.compaction as JsonObject).within_budget, false);
   assert.equal((result.action_signature as JsonObject).matches, true);
@@ -660,15 +660,24 @@ test("captured details reuse one observation without changing action or default 
 });
 
 
-test("selected work reads exact source before delivery and signs the read route", () => {
+test("envelope consumes the canonical channel read list and signs every source route", () => {
   const source = payload();
   source.registry = "/tmp/selected work/registry.json";
   source.runtime_root = "/tmp/selected work/runtime";
   (source.selected_todo as JsonObject).todo_id = "todo_exact_work";
+  const interaction = source.interaction_contract as JsonObject;
+  const sharedReads = [
+    {command: "cat -- '/tmp/selected work/state.md'", source: "goal_state"},
+    {command: "loopx --registry '/tmp/selected work/registry.json' --runtime-root '/tmp/selected work/runtime' --format json todo list --goal-id goal-turn-envelope --todo-id todo_exact_work", source: "selected_todo"},
+  ];
+  (interaction.agent_channel as JsonObject).required_reads = sharedReads;
+  interaction.required_reads = [{command: "obsolete-fallback", source: "existing"}];
+  source.required_reads = [{command: "payload-fallback", source: "existing"}];
   const build = () => buildTurnEnvelope({payload: source, protocol_action_fields: protocolActionFields,
     scheduler_execution_args: ""});
   const envelope = build();
   const reads = envelope.required_reads as JsonObject[];
+  assert.deepEqual(reads, sharedReads);
   const read = reads.find(item => item.source === "selected_todo")!;
   assert.equal(read.command, "loopx --registry '/tmp/selected work/registry.json' --runtime-root '/tmp/selected work/runtime' --format json todo list --goal-id goal-turn-envelope --todo-id todo_exact_work");
   assert.deepEqual(quotaActionSignatureDocument(source, protocolActionFields), turnEnvelopeActionSignatureDocument(envelope));
@@ -676,15 +685,19 @@ test("selected work reads exact source before delivery and signs the read route"
   read.command = String(read.command).replace("todo_exact_work", "todo_wrong_work");
   assert.notDeepEqual(turnEnvelopeActionSignatureDocument(envelope), signed);
 
-  // The existing read list remains intact; an admitted exact read is not duplicated.
-  (source.interaction_contract as JsonObject).required_reads = [
-    {command: "read-existing-evidence", source: "existing"},
-    {command: String(read.command).replace("todo_wrong_work", "todo_exact_work"), source: "selected_todo"},
-  ];
-  assert.equal((build().required_reads as unknown[]).length, 2);
+  const goalTampered = structuredClone(envelope);
+  (goalTampered.required_reads as JsonObject[])[0].command = "cat -- /tmp/wrong-goal.md";
+  assert.notDeepEqual(turnEnvelopeActionSignatureDocument(goalTampered), signed);
+  // Even an explicit empty canonical list takes precedence over historical fallbacks.
+  (interaction.agent_channel as JsonObject).required_reads = [];
+  assert.deepEqual(build().required_reads, []);
+  delete (interaction.agent_channel as JsonObject).required_reads;
+  assert.deepEqual(build().required_reads, interaction.required_reads);
+  delete interaction.required_reads;
+  assert.deepEqual(build().required_reads, source.required_reads);
 });
 
-test("selected source reads do not authorize work on held or non-delivery lanes", () => {
+test("envelope never independently invents requirement reads from work or admission", () => {
   for (const change of [
     (source: JsonObject) => {source.should_run = false;},
     (source: JsonObject) => {source.selected_todo = null;},
@@ -698,17 +711,4 @@ test("selected source reads do not authorize work on held or non-delivery lanes"
       scheduler_execution_args: ""});
     assert.deepEqual(envelope.required_reads, []);
   }
-});
-
-
-test("required Todo detail follows the adaptive primary rather than a stale selection", () => {
-  const source = payload();
-  (source.selected_todo as JsonObject).todo_id = "todo_stale_selection";
-  source.task_orchestration_contract = {
-    schema_version: "task_orchestration_contract_v2", mode: "adaptive", primary_todo_id: "todo_primary",
-  };
-  const envelope = buildTurnEnvelope({payload: source, protocol_action_fields: protocolActionFields,
-    scheduler_execution_args: ""});
-  const read = (envelope.required_reads as JsonObject[]).find(item => item.source === "selected_todo")!;
-  assert.equal(read.command, "loopx --format json todo list --goal-id goal-turn-envelope --todo-id todo_primary");
 });

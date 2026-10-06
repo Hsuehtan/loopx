@@ -1,6 +1,7 @@
 from __future__ import annotations
 from ..quota.blocked_transition_notice import blocked_priority_fallback_owner_reason
 from ..quota.effective_action import EffectiveAction
+from ..effect_runtime import effect_runtime_result
 import shlex
 import typing
 from collections.abc import Mapping
@@ -1022,20 +1023,41 @@ def interaction_next_cli_actions(
     )
 
 
-def _interaction_required_reads(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _interaction_required_reads(
+    payload: dict[str, Any], contract: dict[str, Any], *,
+    runtime_root: str | None, registry_path: str | None,
+) -> list[dict[str, Any]]:
+    """Transport source/admission facts to the existing typed interaction owner."""
     reads = payload.get("required_reads")
-    if not isinstance(reads, list):
-        return []
-    result: list[dict[str, Any]] = []
-    for item in reads:
-        if not isinstance(item, dict):
-            continue
-        # Transport the admitted command intact; display compaction can change
-        # quoted paths or remove arguments. The typed envelope owns validation.
-        if not item.get("command"):
-            continue
-        result.append(dict(item))
-    return result
+    summary = payload.get("agent_todo_summary") or {}
+    acceptance = summary.get("goal_acceptance_contract") or {}
+    replan = payload.get("replan_action_packet") or {}
+    selected = payload.get("selected_todo") or {}
+    orchestration = payload.get("task_orchestration_contract") or {}
+    result = effect_runtime_result("work_item.interaction_reads.project", {
+        "required_reads": [dict(item) for item in reads if isinstance(item, dict) and item.get("command")]
+            if isinstance(reads, list) else [],
+        "goal_id": payload.get("goal_id"),
+        "goal_state_file": payload.get("goal_state_file"),
+        "goal_acceptance_enabled": acceptance.get("enabled") is True,
+        "selected_todo": {"todo_id": selected.get("todo_id")},
+        "task_orchestration_contract": {field: orchestration.get(field)
+            for field in ("schema_version", "mode", "primary_todo_id")},
+        "should_run": payload.get("should_run") is True,
+        "delivery_allowed": contract["agent_channel"].get("delivery_allowed") is True,
+        "selection_required": contract["cli_channel"].get("selection_required") is True,
+        "has_replan": bool(replan), "settlement_only": replan.get("settlement_only") is True,
+        "effective_action": payload.get("effective_action"),
+        "command_prefix": selection.render_cli_command_prefix(
+            runtime_root=runtime_root or payload.get("runtime_root"),
+            registry_path=registry_path or payload.get("registry")),
+    })
+    projected = result.get("required_reads")
+    if not isinstance(projected, list) or any(
+        not isinstance(item, dict) or not item.get("command") for item in projected
+    ):
+        raise RuntimeError("TypeScript interaction required reads are malformed")
+    return projected
 
 
 def _interaction_spend_policy(
@@ -1654,7 +1676,6 @@ def build_interaction_contract(
         _interaction_spend_after_validation(mode)
         and todo_lifecycle_settlement_obligation(payload) is None
     )
-    required_reads = _interaction_required_reads(payload)
     capability_reentry = capability_reentry_adapter.build_runtime_capability_reentry_packet(
         payload,
         available_capabilities=available_capabilities,
@@ -1718,7 +1739,8 @@ def build_interaction_contract(
     )
     if response_plan is not None:
         contract["response_plan"] = response_plan
-    _attach_interaction_required_reads(contract, required_reads)
+    _attach_interaction_required_reads(contract, _interaction_required_reads(
+        payload, contract, runtime_root=runtime_root, registry_path=registry_path))
     _attach_interaction_post_writeback_actions(contract, payload)
     _attach_interaction_vision_continuation_audit(contract, payload)
     _attach_interaction_vision_wait_state(contract, payload)

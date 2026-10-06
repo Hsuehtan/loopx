@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ...materials import goal_state_path
+
 from ...quota import (
     AUTONOMOUS_REPLAN_ACK_NEUTRAL_CLASSIFICATIONS,
     _resolve_reward_memory_experiment_from_status,
@@ -117,6 +119,7 @@ from ..work_items.work_lane import (
 class _QuotaDecisionPreparation:
     status_payload: dict[str, Any]
     safe_goal_id: str
+    goal_state_file: str | None
     requested_agent_id: str | None
     plan: dict[str, Any]
     goal_health_ok: bool
@@ -882,9 +885,11 @@ def _prepare_quota_should_run_item(
         if requested_action_todo_id
         else None
     )
+    state_path = goal_state_path(registry_goal)
     return _QuotaDecisionPreparation(
         status_payload=status_payload,
         safe_goal_id=safe_goal_id,
+        goal_state_file=str(state_path.resolve()) if state_path else None,
         requested_agent_id=requested_agent_id,
         plan=plan,
         goal_health_ok=goal_health_ok,

@@ -5,7 +5,10 @@ import {
   requireNonEmptyString,
   requireStringArray,
   requireStringLiteral,
+  optionalNonEmptyString,
+  jsonObject,
 } from "../runtime_decode.ts";
+import { EffectiveAction } from "../quota/effective_action.generated.ts";
 
 import type { JsonObject } from "../effect_program.ts";
 
@@ -150,4 +153,65 @@ export function decodeInteractionContract(value: unknown): InteractionContract {
       "interaction_contract.cli_channel",
     ),
   };
+}
+
+function readArgument(value: unknown, label: string): string | null {
+  const text = optionalNonEmptyString(value, label);
+  if (text?.includes("\0")) throw new EffectRuntimeRequestError(`${label} contains NUL`);
+  return text;
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+/** The adaptive primary is the work identity for both reads and settlement. */
+export function selectedWorkTodoId(packet: JsonObject): string | null {
+  const orchestration = jsonObject(packet.task_orchestration_contract) ?? {};
+  const primaryTodoId = typeof orchestration.primary_todo_id === "string"
+    ? orchestration.primary_todo_id.trim() : "";
+  if (orchestration.schema_version === "task_orchestration_contract_v2"
+      && orchestration.mode === "adaptive" && primaryTodoId) return primaryTodoId;
+  const selected = jsonObject(packet.selected_todo) ?? {};
+  return typeof selected.todo_id === "string" && selected.todo_id.trim() ? selected.todo_id : null;
+}
+
+/** Generate the shared pre-work reads after final admission. Hosts consume this
+ * list; transport projections must not independently infer requirements.
+ * Python supplies registered source routing, never a second admission rule.
+ */
+export function projectInteractionRequiredReads(request: JsonObject): JsonObject {
+  if (!Array.isArray(request.required_reads)) {
+    throw new EffectRuntimeRequestError("required_reads must be an array");
+  }
+  const reads = request.required_reads.map(value => {
+    const read = requireJsonObject(value, "required read");
+    readArgument(read.command, "required read command");
+    return {...read};
+  }).filter(read => read.command);
+  const shouldRun = requireBoolean(request.should_run, "should_run");
+  const deliveryAllowed = requireBoolean(request.delivery_allowed, "delivery_allowed");
+  const selectionRequired = requireBoolean(request.selection_required, "selection_required");
+  const hasReplan = requireBoolean(request.has_replan, "has_replan");
+  const settlementOnly = requireBoolean(request.settlement_only, "settlement_only");
+  const acceptanceEnabled = requireBoolean(request.goal_acceptance_enabled, "goal_acceptance_enabled");
+  const goalId = readArgument(request.goal_id, "goal_id");
+  if (!shouldRun || !deliveryAllowed || selectionRequired || settlementOnly || !goalId
+      || request.effective_action === EffectiveAction.GOVERNED_CAPABILITY_INTENT) {
+    return {required_reads: reads};
+  }
+  const prefix = requireNonEmptyString(request.command_prefix, "command_prefix");
+  const goalArg = shellQuote(goalId);
+  const add = (command: string, source: string, reason: string) => {
+    if (!reads.some(read => read.command === command)) reads.push({command, source, reason});
+  };
+  const stateFile = readArgument(request.goal_state_file, "goal_state_file");
+  if (stateFile) add(`cat -- ${shellQuote(stateFile)}`, "goal_state",
+    "Read whole Goal intent, acceptance and stops before work/replan. Use exact Todo reads for task state/claims. Failed reads or changed requirements require a fresh guard; summaries cannot replace this read.");
+  if (acceptanceEnabled) add(`${prefix} --format json goal-acceptance inspect --goal-id ${goalArg}`,
+    "goal_acceptance", "Read current owner-configured objective, non-goals and all criteria. Honor its scope and revision; this scoped contract does not replace the original Goal or prove completion. If disabled or changed, obtain a fresh guard.");
+  const todoId = hasReplan ? null : selectedWorkTodoId(request);
+  if (todoId) add(`${prefix} --format json todo list --goal-id ${goalArg} --todo-id ${shellQuote(todoId)}`,
+    "selected_todo", "Read full current work requirements. Require one matching active Todo and current status/claim; if missing, ambiguous or changed, obtain a fresh guard before acting. A summary cannot replace this read.");
+  return {required_reads: reads};
 }

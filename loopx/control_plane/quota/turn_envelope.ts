@@ -1,5 +1,4 @@
 import { EffectiveAction } from "./effective_action.generated.ts";
-import { selectedTurnTodoId } from "../turn_driver/turn_journal.ts";
 import { createHash } from "node:crypto";
 
 import {
@@ -280,7 +279,7 @@ function responsePlan(interaction: JsonObject): JsonObject | null {
 }
 
 function requiredReads(interaction: JsonObject, payload: JsonObject): JsonObject[] {
-  const raw = interaction.required_reads || payload.required_reads;
+  const raw = object(interaction.agent_channel).required_reads ?? interaction.required_reads ?? payload.required_reads;
   const result: JsonObject[] = [];
   for (const value of Array.isArray(raw) ? raw : []) {
     const item = object(value);
@@ -297,26 +296,6 @@ function requiredReads(interaction: JsonObject, payload: JsonObject): JsonObject
       if (rendered) compact[field] = rendered;
     }
     result.push(compact);
-  }
-  const agent = object(interaction.agent_channel);
-  const goalId = scalarString(payload.goal_id, "quota payload goal_id");
-  const todoId = selectedTurnTodoId({
-    action: { selected_todo: payload.selected_todo },
-    task_orchestration_contract: payload.task_orchestration_contract,
-  });
-  // Summaries can already be truncated upstream. Require the existing exact
-  // cold read before selected work; an intact display prefix is not the source.
-  if (payload.should_run === true && agent.delivery_allowed === true && goalId && todoId
-    && !object(interaction.cli_channel).selection_required
-    && Object.keys(object(payload.replan_action_packet)).length === 0
-    && payload.effective_action !== EffectiveAction.GOVERNED_CAPABILITY_INTENT) {
-    const command = `${commandPrefix(payload.runtime_root, payload.registry)} --format json todo list` +
-      ` --goal-id ${shellQuote(goalId)} --todo-id ${shellQuote(todoId)}`;
-    if (!result.some(item => item.command === command)) result.push({
-      command,
-      source: "selected_todo",
-      reason: "Read full requirements before work. Require one matching active Todo and current status/claim; if missing, ambiguous or changed, obtain a fresh guard before acting. A summary cannot replace this read.",
-    });
   }
   return result;
 }
