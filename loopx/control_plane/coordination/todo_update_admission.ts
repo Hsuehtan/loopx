@@ -1,6 +1,8 @@
 /** Admission for Todo edits; terminal completion retains its own lease proof.
  * Grants may cross a claim owner;
  * exclusions, bindings and execution lineage remain independent restrictions. */
+import {leaseRepositoryRejection} from "../work_items/task_lease_repository.ts";
+import {isExploreReferenceAppend} from "../todos/field_update.ts";
 import {acceptanceRestoration} from "./todo_acceptance_restoration.ts";
 import {monitorMutationRejection} from "./todo_monitor_cycle.ts";
 import type {JsonObject} from "../effect_program.ts";
@@ -33,7 +35,9 @@ export function todoUpdateAdmissionRejection(
       proof: decodeTaskLeaseProof(input.lease_idempotency_key == null && input.lease_expected_version == null ? null :
         {idempotency_key: input.lease_idempotency_key, expected_version: input.lease_expected_version}), now: input.now});
   }
-  if (todo.status === "done" && kind === "planning") {
+  const evidenceOnly = isExploreReferenceAppend(input.planning_intent ?? {})
+    && Object.keys(input.patch).length === 0 && input.clear_fields.length === 0;
+  if (todo.status === "done" && kind === "planning" && !evidenceOnly) {
     return reject("unsupported_todo_update_target",
       "native metadata update cannot complete a Todo; use the terminal lifecycle command");
   }
@@ -135,6 +139,18 @@ export function todoUpdateAdmissionRejection(
       return reject("invalid_coordination_projection",
         error instanceof Error ? error.message : "invalid retained lease facts");
     }
+  }
+  // A completed owner's evidence association is metadata, not renewed work.
+  // Keep the retained execution key/version under the provider transaction CAS;
+  // no active, expired, foreign or missing lease receives this exception.
+  if (evidenceOnly && todo.status === "done" && lease?.status === "released" &&
+      todo.claimed_by === input.actor_agent_id && lease.owner === input.actor_agent_id &&
+      typeof input.lease_idempotency_key === "string" &&
+      lease.idempotency_key === input.lease_idempotency_key &&
+      typeof input.lease_expected_version === "number" &&
+      lease.version === input.lease_expected_version) {
+    const repositoryRejection = leaseRepositoryRejection(todo, lease);
+    return repositoryRejection === null ? null : reject(repositoryRejection, "Evidence association must retain the completed work repository");
   }
   if (!delegatedUnleasedOverride && (lease !== undefined || mode === "hard_lease" ||
       input.lease_idempotency_key != null || input.lease_expected_version != null)) {

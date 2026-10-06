@@ -55,6 +55,54 @@ def registry(tmp_path, *, graph=False, planning=False):
     return path
 
 
+@pytest.mark.parametrize("command", ["turn-context", "summary", "worker-branch-plan", "graph"])
+@pytest.mark.parametrize("damage", ["truncated", "foreign-goal", "invalid-status"])
+def test_decision_reads_reject_incomplete_evidence_and_recover(tmp_path, command, damage):
+    path = registry(tmp_path, graph=True, planning=True)
+    root = tmp_path / "runtime"
+    log = explore_result_log_path(root, "research")
+    node = build_explore_node_event(
+        goal_id="research", agent_id="worker", node_id="route",
+        title="Candidate route", status="open",
+    )
+    finding = build_explore_finding_event(
+        goal_id="research", agent_id="worker", node_id="route",
+        finding_id="counterexample", title="Counterexample", status="refuted",
+        summary="Applies only to the tested inputs.",
+    )
+    append_explore_result_event(log, node)
+    append_explore_result_event(log, finding)
+    healthy = log.read_bytes()
+    if damage == "truncated":
+        damaged = json.dumps(node) + '\n{"event_kind":'
+    else:
+        altered = {**finding, **({"goal_id": "foreign"} if damage == "foreign-goal"
+                                else {"status": "invented"})}
+        damaged = json.dumps(node) + "\n" + json.dumps(altered) + "\n"
+    log.write_text(damaged)
+    args = [sys.executable, "-m", "loopx.cli", "--registry", str(path),
+            "--runtime-root", str(root), "--format", "json", "explore", command,
+            "--goal-id", "research"]
+    if command in {"turn-context", "worker-branch-plan"}:
+        args += ["--agent-id", "worker"]
+    output = tmp_path / "graph.json"
+    if command == "graph":
+        output.write_text("previous export")
+        args += ["--graph-format", "json", "--out", str(output)]
+    rejected = subprocess.run(args, capture_output=True, text=True)
+    assert rejected.returncode != 0, rejected.stdout
+    packet = json.loads(rejected.stdout)
+    assert packet["ok"] is False and "Explore result" in packet["error"]
+    assert log.read_text() == damaged
+    if command == "graph":
+        assert output.read_text() == "previous export"
+    log.write_bytes(healthy)
+    recovered = subprocess.run(args, capture_output=True, text=True)
+    assert recovered.returncode == 0, recovered.stdout
+    assert json.loads(recovered.stdout)["ok"] is True
+    assert log.read_bytes() == healthy
+
+
 @pytest.mark.parametrize(
     "mode,graph,planning",
     [("off", False, False), ("evidence", True, False), ("planning", True, True)],
@@ -126,7 +174,7 @@ def test_disabled_hook_keeps_packet_and_does_not_read_evidence(tmp_path, monkeyp
         pytest.fail("disabled Explore read evidence")
 
     monkeypatch.setattr(
-        "loopx.capabilities.explore.turn_context.load_explore_result_events", unexpected
+        "loopx.capabilities.explore.turn_context.load_explore_result_events_strict", unexpected
     )
     assert (
         extend_turn_start_dispatch(

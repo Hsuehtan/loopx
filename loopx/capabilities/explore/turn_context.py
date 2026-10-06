@@ -15,7 +15,7 @@ from ...todos import list_goal_todos
 from .result_log import (
     build_explore_result_projection,
     explore_result_log_path,
-    load_explore_result_events,
+    load_explore_result_events_strict,
 )
 from .todo_branch_plan import (
     build_explore_todo_branch_plan,
@@ -36,7 +36,9 @@ def _policy(registry_path, goal_id):
 
 
 def explore_turn_context(
-    *, registry_path: Path, runtime_root: Path, goal_id: str, agent_id: str
+    *, registry_path: Path, runtime_root: Path, goal_id: str, agent_id: str,
+    result_limit: int = 3, result_offset: int = 0,
+    result_node: str | None = None, result_revision: str | None = None,
 ):
     goal, graph, gate = _policy(registry_path, goal_id)
     require_registered_agent_id(
@@ -44,13 +46,13 @@ def explore_turn_context(
     )
     projection, plan = {}, {}
     if graph or gate["enabled"]:
-        events = load_explore_result_events(
+        events = load_explore_result_events_strict(
             explore_result_log_path(runtime_root, goal_id), goal_id=goal_id
         )
         projection = build_explore_result_projection(
             # Resolve explicit Todo links before the typed output budget is
             # applied. New unrelated findings must not hide an older refutation.
-            events, goal_id=goal_id, finding_limit=len(events) if gate["enabled"] else 3,
+            events, goal_id=goal_id, finding_limit=len(events),
             mermaid_node_limit=3,
         )
     if gate["enabled"]:
@@ -89,6 +91,10 @@ def explore_turn_context(
             "projection": projection,
             "plan": plan,
             "route": route,
+            "result_limit": result_limit,
+            "result_offset": result_offset,
+            "result_node": result_node,
+            "result_revision": result_revision,
         },
     )
 

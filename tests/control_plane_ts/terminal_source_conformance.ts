@@ -1,6 +1,7 @@
 /** One mixed production-scale graph; independent expectations for review,
  * validation, lease retirement and receipt recovery on every real provider. */
 import assert from "node:assert/strict";
+import {executeCoordinationTodoUpdate} from "../../loopx/control_plane/coordination/todo_update.ts";
 import test from "node:test";
 import type {AuthorityStore} from "../../loopx/control_plane/coordination/authority_store.ts";
 import type {JsonObject} from "../../loopx/control_plane/effect_program.ts";
@@ -201,6 +202,42 @@ export function registerTerminalSourceConformance(provider: string, factory: Aut
         linked_successor_todo_ids: [String(other.todo_id)]});
       assert.equal(lateLink.reason_code, "todo_terminal_successor_intent_after_completion", JSON.stringify(lateLink));
       assert.deepEqual(await loaded(store), after);
+      // A result association may follow ordinary completion without reopening
+      // the work or renewing its retired lease. Exercise the same provider/CAS
+      // path as normal updates, including a second provider instance on replay.
+      const attach = {goal_id: goal, todo_id: request.todo_id, expected_role: "agent",
+        actor_agent_id: "agent-a", registered_agents: fixture.registered_agents,
+        operation_id: "attach-terminal-evidence", patch: {}, clear_fields: [],
+        planning_intent: {append_explore_result_node_refs: ["bounded-question"]},
+        lease_idempotency_key: String(oldLease.idempotency_key),
+        lease_expected_version: Number(oldLease.version), dry_run: false,
+        now: new Date(String(scenario.after_expiry))};
+      for (const changes of [
+        {actor_agent_id: "agent-b"},
+        {lease_expected_version: Number(oldLease.version) + 1},
+        {lease_idempotency_key: "different-execution"},
+        {patch: {note: "Unrelated edit"}},
+      ]) {
+        assert.equal((await executeCoordinationTodoUpdate(store, {...attach, ...changes})).status, "failed");
+        assert.deepEqual(await loaded(store), after);
+      }
+      const associated = await executeCoordinationTodoUpdate(store, attach);
+      assert.equal(associated.status, "applied", JSON.stringify(associated));
+      const linked = await loaded(contender);
+      assert.deepEqual(linked.head.leases, after.head.leases);
+      const source = (after.head.todos as JsonObject[]).find(todo => todo.todo_id === request.todo_id)!;
+      const linkedSource = (linked.head.todos as JsonObject[]).find(todo => todo.todo_id === request.todo_id)!;
+      assert.equal(linkedSource.status, "done");
+      assert.deepEqual(linkedSource.completion_continuation, source.completion_continuation);
+      assert.ok((linkedSource.explore_result_node_refs as string[]).includes("bounded-question"));
+      assert.deepEqual((linked.head.todos as JsonObject[]).filter(todo => todo.todo_id !== request.todo_id),
+        (after.head.todos as JsonObject[]).filter(todo => todo.todo_id !== request.todo_id));
+      assert.equal((await executeCoordinationTodoUpdate(contender, attach)).status, "replayed");
+      assert.deepEqual(await loaded(store), linked);
+      assert.equal((await executeCoordinationTodoUpdate(store, {...attach,
+        planning_intent: {append_explore_result_node_refs: ["changed-question"]}})).status, "failed");
+      assert.deepEqual(await loaded(store), linked);
+      assert.deepEqual(await store.readReceipt(commit.operation_identity.operation_id), receipt);
     });
   }
 }

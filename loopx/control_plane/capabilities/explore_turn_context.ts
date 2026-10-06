@@ -1,4 +1,5 @@
 /** Compact Explore read model. Existing Graph/Harness owners retain all gates. */
+import {createHash} from "node:crypto";
 import type {JsonObject} from "../effect_program.ts";
 import {EffectRuntimeRequestError} from "../effect_runtime_errors.ts";
 import {requireInteger, requireJsonObject, requireNonEmptyString, requireStringArray} from "../runtime_decode.ts";
@@ -56,7 +57,52 @@ export function projectExploreTurnContext(params: JsonObject): JsonObject {
   const findings = rows(projection.findings);
   const branches = rows(plan.selected_branches);
   const frontier = rows(projection.frontier);
+  const selectedRefs = new Set(harness ? branches.slice(0, 3).flatMap(branch => {
+    if (branch.typed_evidence_audit == null) return [];
+    const audit = requireJsonObject(branch.typed_evidence_audit, "Explore evidence audit");
+    return requireStringArray(audit.requested_node_refs ?? [], "Explore node refs");
+  }) : []);
+  const attachedResults = findings.filter(row => Array.isArray(row.tags) && row.tags.includes("writeback-result"));
+  // Keep the same detail budget, but do not let unrelated newer results evict
+  // the applicability of evidence linked to the next selected work item.
+  const linkedResults = attachedResults.filter(row => selectedRefs.has(String(row.node_id ?? "")));
+  // Reserve detail slots for the latest refutation of each linked question.
+  // Repeated findings on one question must not evict another question's scope.
+  // A newer positive observation may apply to different inputs; recency alone
+  // cannot supersede that counterexample. Fill remaining slots by recency.
+  // Projection already resolves revisions of the same finding; no history or
+  // scheduler state is changed here.
+  const refutedQuestions = new Set<string>();
+  const counterexamples = linkedResults.filter(row => {
+    const node = String(row.node_id ?? "");
+    if (row.status !== "refuted" || refutedQuestions.has(node)) return false;
+    refutedQuestions.add(node);
+    return true;
+  });
+  const reserved = new Set(counterexamples);
+  const writebackResults = [
+    ...counterexamples,
+    ...linkedResults.filter(row => !reserved.has(row)),
+    ...attachedResults.filter(row => !selectedRefs.has(String(row.node_id ?? ""))),
+  ];
   const command = (...args: string[]) => [...route, "explore", ...args, "--goal-id", goal];
+  const resultLimit = requireInteger(params.result_limit ?? 3, "result_limit");
+  const resultOffset = requireInteger(params.result_offset ?? 0, "result_offset");
+  if (resultLimit < 1 || resultLimit > 20 || resultOffset < 0) {
+    throw new EffectRuntimeRequestError("Use result_limit 1..20 and a nonnegative result_offset");
+  }
+  const resultNode = params.result_node == null ? null : requireNonEmptyString(params.result_node, "result_node");
+  const resultRows = resultNode == null ? writebackResults : writebackResults.filter(row => row.node_id === resultNode);
+  const resultRevision = createHash("sha256").update(JSON.stringify([goal, agent, resultNode, resultRows])).digest("hex");
+  if (params.result_revision != null && params.result_revision !== resultRevision) {
+    throw new EffectRuntimeRequestError("Explore evidence changed; restart at result_offset 0 without result_revision");
+  }
+  if (resultOffset > 0 && params.result_revision == null) {
+    throw new EffectRuntimeRequestError("Continuation requires result_revision from the previous page");
+  }
+  const visibleResults = resultRows.slice(resultOffset, resultOffset + resultLimit);
+  const remainingResults = Math.max(0, resultRows.length - resultOffset - visibleResults.length);
+  const resultRead = (...args: string[]) => command("turn-context", "--agent-id", agent, ...args);
   return {
     ok: true, goal_id: goal, agent_id: agent, graph_enabled: graph, harness_enabled: harness,
     graph: graph ? {
@@ -64,11 +110,30 @@ export function projectExploreTurnContext(params: JsonObject): JsonObject {
       recent_nodes: nodes.slice(0, 3).map(row => compact(row, ["node_id", "title", "status", "blocked_reason"])),
       // The canonical evidence projection calls the finding's title `finding`.
       recent_findings: findings.slice(0, 3).map(row => compact({...row, title: row.finding}, ["finding_id", "node_id", "title", "status"])),
+      // Full scoped summaries; progressive reads can raise the page size.
+      // These retain the observation AND applicability; clipping away conditions
+      // could turn a bounded refutation into a blanket route ban.
+      writeback_results: visibleResults
+        .map(row => ({...compact(row, ["finding_id", "node_id", "finding", "status", "evidence_refs"]),
+          summary: String(row.summary ?? "").slice(0, 1200)})),
+      result_page: {
+        total: resultRows.length, offset: resultOffset, limit: resultLimit,
+        remaining: remainingResults, revision: resultRevision,
+        next_command: remainingResults ? resultRead(
+          "--result-offset", String(resultOffset + visibleResults.length),
+          "--result-limit", String(resultLimit), "--result-revision", resultRevision,
+          ...(resultNode == null ? [] : ["--result-node", resultNode]),
+        ) : null,
+        node_command_template: resultRead("--result-node", "<node-id>", "--result-limit", "10"),
+      },
       omitted_nodes: Math.max(0, nodes.length - 3),
       summary_command: command("summary"),
+      result_writeback_option: "--explore-result-json <result.json>",
+      result_attachment_schema: "explore_result_attachment_v0",
+      result_writeback_guidance: "When work yields reusable evidence, attach node_id, question, applicability, input_revision, observation, interpretation, status and evidence_refs to ordinary Todo/Turn refresh-state. This creates the question if absent, preserves existing node state, and links the result to this Todo. Use tentative for inconclusive or prerequisite failures; a score alone does not establish refutation. No attachment is required for routine work without new evidence.",
       record_node_template: command("node", "--title", "<hypothesis or experiment>", "--status", "exploring"),
       record_finding_template: command("finding", "--node", "<node-id>", "--title", "<evidence-backed result>", "--status", "<tentative|confirmed|refuted>"),
-      guidance: "Use existing evidence before repeating a route. Record meaningful hypotheses and supported or refuted results with stable node ids. Fill templates from actual evidence; do not create ceremonial nodes or infer findings from a score alone.",
+      guidance: "Use result_page.next_command for omitted results or node_command_template for a question; --result-limit can expand each page up to 20. Use existing evidence before repeating a route. Record meaningful hypotheses and supported or refuted results with stable node ids. Fill templates from actual evidence; do not create ceremonial nodes or infer findings from a score alone.",
     } : null,
     harness: harness ? {
       orchestration_gate: gate,

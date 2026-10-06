@@ -730,6 +730,8 @@ export function createEffectRuntimeHandlers(
     ["work_item.replan_context.project_snapshot", lazyHandler(() => import("./work_items/replan_context.ts"), ({projectReplanContextSnapshot}) => projectReplanContextSnapshot)],
     ["explore.configuration.resolve", lazyHandler(() => import("./capabilities/explore_configuration.ts"), ({resolveExploreConfiguration}) => resolveExploreConfiguration)],
     ["explore.configuration.plan", lazyHandler(() => import("./capabilities/explore_configuration.ts"), ({planExploreConfiguration}) => planExploreConfiguration)],
+    ["explore.result.normalize", lazyHandler(() => import("./capabilities/explore_result_writeback.ts"), ({normalizeExploreResultAttachment}) => normalizeExploreResultAttachment)],
+    ["explore.result.intent", lazyHandler(() => import("./capabilities/explore_result_writeback.ts"), ({produceExploreResultIntent}) => produceExploreResultIntent)],
     ["explore.turn_context", lazyHandler(() => import("./capabilities/explore_turn_context.ts"), ({projectExploreTurnContext}) => projectExploreTurnContext)],
     ["explore.research.normalize", lazyHandler(() => import("./capabilities/explore_research.ts"), ({normalizeResearchObservation}) => normalizeResearchObservation)],
     ["explore.research.validate_attribution", lazyHandler(() => import("./capabilities/explore_research.ts"), ({validateResearchAttribution}) => validateResearchAttribution)],

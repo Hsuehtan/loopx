@@ -39,6 +39,7 @@ import { useTypedActionReadback } from "../../data/use-typed-action-readback";
 import { ChannelHeader } from "./channel-header";
 import { GoalLoopXMode } from "./goal-loopx-mode";
 import { GoalTeamResults } from "./goal-team-results";
+import {GoalExploreResults} from "./goal-explore-results";
 import { GoalManagedResults } from "./goal-managed-results";
 import { GoalResearchResults, type GoalResearchApi } from "./goal-research-results";
 import { sendLoopXMessage, type LoopXModeSnapshot } from "../../data/chat";
@@ -267,6 +268,7 @@ function GoalOutputsView({
         ))}
         {localResults ? <GoalManagedResults goalId={goalId} zh={locale === "zh-CN"} /> : null}
       </section>
+      {active && localResults ? <GoalExploreResults key={goalId} goalId={goalId} zh={locale === "zh-CN"} /> : null}
       {active && researchApi ? <GoalResearchResults key={`${goalId}:${researchApi.indexUrl}:${researchApi.detailUrl}`} goalId={goalId} api={researchApi} zh={locale === "zh-CN"} /> : null}
       {active && teamSessionId && !teamSnapshot && !teamError ? <p className="personal-object-list-state" role="status">{t("files.checkingTeam")}</p> : null}
       {active && teamSessionId && teamError ? <p className="personal-object-list-state is-error" role="alert">{t("files.teamLoadFailed")} <button type="button" onClick={() => setTeamRefresh(value => value + 1)}>{t("startup.retry")}</button></p> : null}

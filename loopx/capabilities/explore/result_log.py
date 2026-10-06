@@ -502,6 +502,7 @@ def append_explore_result_events(
     events: Sequence[Mapping[str, Any]],
     *,
     expected_goal_id: str,
+    create_only_node_ids: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Append a validated batch once by event id under the result-log lock."""
 
@@ -524,9 +525,20 @@ def append_explore_result_events(
                     continue
                 if isinstance(current, dict) and current.get("event_id"):
                     existing_by_id[str(current["event_id"])] = current
+        current_nodes = {
+            str(row["result_id"]): row for row in existing_by_id.values()
+            if row.get("event_kind") == EVENT_KIND_NODE
+        }
         pending: list[dict[str, Any]] = []
         for event in validated:
             event_id = str(event["event_id"])
+            if event.get("event_kind") == EVENT_KIND_NODE and event["result_id"] in create_only_node_ids:
+                node = current_nodes.get(event["result_id"])
+                if node is not None:
+                    if any(node.get(key) != event.get(key) for key in ("node_kind", "title", "summary")):
+                        raise ValueError("Explore question identity conflicts with its existing scope")
+                    reused += 1
+                    continue
             existing = existing_by_id.get(event_id)
             if existing is None:
                 pending.append(event)
