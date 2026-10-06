@@ -71,9 +71,10 @@ SURFACE_BUDGETS = {
         "cold_path": "status, history, or active state",
         # Codex keeps a lossless codex_app compatibility alias while the
         # provider-neutral app_automation packet becomes canonical.
-        # Pre-limit work counts add useful scope/completeness evidence; allow
-        # modest headroom after removing the redundant observed-row count.
-        "max_json_chars": 14_500,
+        # Full Goal reads now travel in both existing interaction channels.
+        # Matched base/head fixture: 14,041 -> 15,290 chars; the original
+        # unnormalized smoke is 15,344. Keep command routing and failure rules.
+        "max_json_chars": 16_000,
         "max_nested_keys": 360,
         "max_top_level_keys": 52,
     },

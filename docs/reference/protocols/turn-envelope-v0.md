@@ -94,33 +94,53 @@ still require a separately pinned experiment. Capture grants no additional
 read/write/lease authority. Keep captures private; disable the option in the
 next run and use ordinary file management to remove unneeded records.
 
-Selected work and its full requirements have different projections. On an
-admitted delivery Turn with a selected Todo, the envelope now includes an exact
-`todo list --goal-id … --todo-id …` command in signed `required_reads`, bound to
-the source registry/runtime when available. Run it before work and require one
-matching active Todo with current status/claim; missing, ambiguous or changed
-work requires a fresh guard. The existing reader returns full source text even
-when the quota summary was shortened. The read is current, not a snapshot bound
-to the earlier selection; it grants no claim, lease or mutation authority.
+Whole-Goal requirements and selected work have different sources. After final
+delivery admission, the shared typed interaction owner adds these pre-work reads
+after any existing hook reads, without duplicating identical commands:
 
-This is a default change for delivery envelopes, including Codex CLI and shared
-host adapters. Held, selection-only, replan and governed-capability lanes do not
-acquire this extra read. Full quota summaries stay compact. Shared adapters now
-retain selected Todo context; text aliases require exact equality, never a
-case-folded or truncated-prefix match. Supplied selected text survives envelope
-serialization intact. Hosts must honor `required_reads`; the envelope does not
-produce a receipt proving that the model read or followed them. No new global
-Goal acceptance gate or frontend/Lark operation is introduced; their existing
-Todo detail route remains the source readback. Completing this work cannot by
-itself establish Goal completion.
+1. `cat -- <registered-state-file>` restores the whole Goal intent, acceptance
+   and stop conditions. The pointer is resolved from the registered Goal, not a
+   selected Todo or run-history source label.
+2. When canonical acceptance is enabled, `goal-acceptance inspect --goal-id …`
+   restores its full objective, non-goals, criteria, scope and revision. It does
+   not execute validators or expose their commands. A scoped acceptance contract
+   does not replace original Goal intent or prove global completion.
+3. For selected work, `todo list --goal-id … --todo-id …` restores full current
+   task text and status/claim from the owning reader, including when canonical
+   Todos supersede a stale Markdown display. Adaptive work uses its primary ID.
 
-中文：允许交付且已选 Todo 的 Turn 短包，现在默认带有签名的精确 Todo 全文读取
-指令，并保留来源 registry/runtime。执行工作前须读取、核对唯一的活跃任务及当前
-状态/claim；缺失、歧义或变化须重新 guard。读取的是当前原文，不是旧 selection 的
-版本快照，也不授予 claim、lease 或写权限。等待、待选择、replan 和受治理 capability
-分支不追加此读取。共享宿主保留选中任务；正文只在完全相同时复用推荐动作，不能
-将大小写折叠或截断前缀视为等价。这里验证传输与读取入口，不证明模型已读/已遵循，
-也不新增 Goal 全局完成门禁。前端/Lark 继续使用现有 Todo 详情路径。
+Ordinary product heartbeat consumes
+`interaction_contract.agent_channel.required_reads`; the CLI channel carries
+the same list. TurnEnvelope consumes and signs this list as `required_reads`,
+including in Codex CLI and shared host adapters. It does not independently
+synthesize another read policy. Historical top-level read lists remain readable.
+The CLI source commands bind the registry/runtime when available. Missing,
+ambiguous, failed or changed reads require a fresh guard before acting. Reads
+return current content, not a snapshot bound to the earlier selection, and
+grant no read/write permission, claim, lease or amendment authority.
+
+This is a default decision/heartbeat behavior change, not an envelope opt-in.
+Admitted replans acquire Goal reads, without an old selected-Todo read.
+Non-delivery, selection-only, settlement-only and governed-capability lanes
+acquire no extra reads. Full quota summaries stay compact. Shared adapters retain
+selected Todo context; text aliases require exact equality, never a case-folded
+or truncated-prefix match. Supplied selected text survives envelope serialization
+intact. Hosts must honor the reads; signing does not prove execution or model
+adherence. Full Goal requirement coverage and global closeout remain open.
+No new frontend/Lark operation or configuration is introduced. Regenerate saved
+expanded heartbeat prompts to consume the new contract; bootstrap prompts reload
+installed rules on their next wake. This source-checkout change does not upgrade
+an installed runtime or modify an existing automation.
+
+中文：共享 typed interaction owner 在准入后生成 Goal 原文、已启用的结构化验收、
+当前 Todo 全文三层读取。普通产品 heartbeat 消费 agent channel 清单，TurnEnvelope
+只传输并签名同一清单；不能仅由短包临时推导义务。Goal 原文恢复完整意图和停止条件，
+局部验收不能替代完整目标，任务状态/claim 继续由精确 Todo reader 提供。读取失败、
+缺失、歧义或变化须重新 guard；当前内容不是 selection 快照，签名也不证明模型已读。
+这是默认 guard/heartbeat 行为变化：准入的 replan 读取 Goal，等待、待选择、仅结算及
+受治理 capability 分支不追加读取。完整义务覆盖与全局收口仍未实现。旧的展开式
+heartbeat prompt 需重新生成；bootstrap 会在下次唤醒重载已安装规则。本源码改动不会
+升级已安装 runtime 或修改现有 automation，也不新增前端/Lark 操作。
 
 The envelope flag selects a projection of the full decision. The original v0
 contract left the default `quota should-run` output unchanged; the

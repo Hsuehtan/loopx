@@ -10,7 +10,7 @@ and size/count budgets.
 | --- | --- | --- | --- | --- | --- | --- |
 | `heartbeat_prompt_json` | heartbeat automation | wake and route one bounded turn | `quota should-run`, `status`, or `review-packet --handoff-only` | `json_chars <= 5400` plus `interface_budget.within_budget=true` | `nested_keys <= 40` | `top_level_keys <= 30` |
 | `review_packet_handoff_only_json` | project-agent handoff | forward the smallest sufficient task packet | full `review-packet` or run-history artifact | `json_chars <= 3000` plus `handoff_interface_budget.within_budget=true` | `nested_keys <= 40` | `top_level_keys <= 18` |
-| `quota_should_run_json` | quota guard | decide whether the selected goal may spend compute | `status`, `history`, or active state | `json_chars <= 14500` | `nested_keys <= 360` | `top_level_keys <= 52` |
+| `quota_should_run_json` | quota guard | decide whether the selected goal may spend compute | `status`, `history`, or active state | `json_chars <= 16000` | `nested_keys <= 360` | `top_level_keys <= 52` |
 | `dashboard_status_json` | operator dashboard | render first-screen operator state | `history`, run artifacts, or project-local adapter output | `json_chars <= 22500` | `nested_keys <= 350` | `top_level_keys <= 27` |
 
 These four budgets measure compact machine payloads. For
@@ -83,18 +83,31 @@ route, pending-selection qualification, and hard-lane preemption evidence. The
 budget retains modest headroom for those enforceable semantics; repeated action
 details and command prefixes still belong in compact references or cold paths.
 
-The work-count projection adds scope and completeness facts that a bounded Todo
-list cannot supply. Its observed-row count is derived from `open - hidden`,
-rather than repeated in the wire object. The quota ceiling moves from 14,000
-to 14,500 characters and from 350 to 360 nested keys to retain modest headroom
-for this useful semantic growth; the top-level ceiling stays 52. Existing
-repeated Todo bodies across named lanes have distinct consumers and cannot be
-removed without a separately validated caller migration.
+The work-count projection retains scope/completeness that a bounded Todo list
+cannot supply; its observed-row count is derived from `open - hidden`. Shared
+pre-work reads now retain complete Goal source routing in both existing Agent
+and CLI interaction channels. Under the same hot-path fixture at base
+`abfd34d444e7877d6bcc0e18fd89fc06d5d89093`, compact quota JSON grows from
+14,041 to 15,290 characters, nested keys from 353 to 358 and top-level keys from
+48 to 51; the original smoke's longer temporary route produces 15,344 characters
+and fails the previous 14,500 ceiling. The quota regression allowance moves to
+16,000 characters (656 characters above that failing fixture), while nested/top
+ceilings stay 360/52. Keep executable commands and failure/refresh rules; these
+two channel copies serve existing consumers. Retiring either requires caller
+migration/parity. This is not a transport limit or execution-quota increase.
+The matched thin generator grows 5,342 → 5,372 JSON characters and 2,817 → 2,847
+body characters after wording compaction, retaining its 5,400/3,000 limits.
+The corresponding TurnEnvelope grows 5,390 → 6,427 UTF-8 bytes; retain its
+8,192-byte warning target. No model token or latency improvement is claimed.
 
-工作计数增加了展示列表无法提供的完整性与作用域信息；已观察行数由 `open - hidden`
-推导，不重复传输。quota 字符预算从 14,000 调至 14,500，嵌套键从 350 调至 360，
-保留适量余量；顶层键上限仍为 52。不同 lane 重复携带的 Todo 有既有消费者，后续
-去重应配合调用方迁移，不能仅为通过尺寸测试而删除。
+工作计数保留列表无法表达的范围/完整性；已观察行数仍由 `open - hidden` 推导。
+共享前置读取在既有 Agent/CLI 双 channel 保留完整 Goal 来源路由。同负载 quota
+JSON 从 14,041 增至 15,290 字符；原 smoke 的较长临时路径产生 15,344 字符，超出
+旧 14,500 回归预算。字符预算调至 16,000，保留 656 字符余量；嵌套/顶层上限仍为
+360/52。保留可执行命令及失败/重新 guard 规则，不能未经消费者迁移就删掉一个
+channel。它不增加传输或执行配额。压缩文案后 thin generator 的 JSON/正文为
+5,372/2,847 字符，原 5,400/3,000 上限保持；对应短包为 6,427 UTF-8 字节，保留
+8,192 字节告警目标，不声称模型 token 或延迟收益。
 
 | Emitted Surface | Default Qualification | Scale / Limit Contract | Cold Path |
 | --- | --- | --- | --- |

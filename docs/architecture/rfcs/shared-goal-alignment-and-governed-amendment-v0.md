@@ -316,9 +316,16 @@ revision, remaining work across Agents and pending amendments. One Agent's
 must retain identity and a lossless detail route rather than substituting a
 display prefix for the source commitment.
 
-**Delivery boundary:** the selected-work prerequisite adds a signed exact Todo
-read to delivery Turn envelopes and preserves selected context in shared host
-adapters. Existing exact-detail readers remain authoritative. This does not
+**Delivery boundary:** the existing typed interaction owner generates full Goal
+source reads, enabled canonical acceptance inspection and exact current-Todo
+reads after admission. Ordinary product heartbeat and TurnEnvelope consume the
+same list; the envelope signs it rather than inventing another read policy.
+Goal documents recover intent and stops, while canonical acceptance and exact
+Todo readers retain their existing authority and scope. A selected-work
+acceptance document cannot replace whole-Goal intent. Shared host adapters
+preserve selected context. Default heartbeat generation → guard → source
+readback must be tested alongside envelope transport; one route cannot qualify
+the other. This does not
 implement the full requirement ledger, a global closeout gate, automatic proof
 of required-read execution, or model adherence. Those remain with R1/R4/R5 and
 S11; this RFC does not silently enable a new acceptance policy. The next complete

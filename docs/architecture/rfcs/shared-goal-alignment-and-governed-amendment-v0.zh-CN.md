@@ -272,8 +272,12 @@ lease/frontier 影响后替代旧要求，不能禁止合法目标变更。代�
 一个 Agent 的 `no_followup` 或一个 Todo 完成，不能推出 `achieved`。压缩投影须保留
 身份及无损详情入口，不能用展示前缀替代源承诺。
 
-**交付边界：** 当前工作前置切片为允许交付的 TurnEnvelope 增加带签名的精确 Todo
-读取，并在共享 host adapter 中保留选中任务。完整详情仍由既有 reader 提供；尚未
+**交付边界：** 既有 typed interaction owner 在准入后生成 Goal 原文、已启用的
+canonical acceptance 与当前 Todo 精确详情读取。普通产品 heartbeat 与 TurnEnvelope
+消费同一清单；短包只传输并签名，不另行制定读取规则。Goal 文档恢复完整意图和停止
+条件，canonical acceptance 与 Todo reader 保留各自权威和范围；selected-work 验收
+文档不能替代完整目标。共享 host adapter 保留选中任务。须一起验证默认 heartbeat
+生成→guard→来源回读与短包传输，不能用一条路径替另一条验收。尚未
 实现完整义务账本、全局收口门禁、读取执行的自动证明或模型遵循资格。这些继续归
 R1/R4/R5 与 S11，本 RFC 不隐式开启新的 acceptance policy。下一完整切片应让既有
 结构化 criterion 穿过任务切换和重启，在同一 owner 拒绝覆盖丢失并使过期证据失效。
