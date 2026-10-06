@@ -943,7 +943,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#1",
-      "line": 344,
+      "line": 345,
       "column": 49,
       "kind": "codec_read",
       "api": "load_registry",
@@ -951,7 +951,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#2",
-      "line": 360,
+      "line": 361,
       "column": 24,
       "kind": "codec_read",
       "api": "load_registry",
@@ -959,7 +959,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#3",
-      "line": 368,
+      "line": 369,
       "column": 24,
       "kind": "codec_read",
       "api": "load_registry",
@@ -967,7 +967,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#4",
-      "line": 547,
+      "line": 548,
       "column": 53,
       "kind": "codec_read",
       "api": "load_registry",
@@ -975,7 +975,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#5",
-      "line": 678,
+      "line": 679,
       "column": 25,
       "kind": "codec_read",
       "api": "load_registry",
@@ -983,7 +983,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#6",
-      "line": 749,
+      "line": 750,
       "column": 13,
       "kind": "codec_read",
       "api": "load_registry",
@@ -991,7 +991,7 @@
     },
     {
       "site": "loopx/cli_commands/todo.py::<module>.handle_todo_command::codec_read:load_registry#7",
-      "line": 800,
+      "line": 801,
       "column": 29,
       "kind": "codec_read",
       "api": "load_registry",
@@ -1711,7 +1711,7 @@
     },
     {
       "site": "loopx/control_plane/todos/list_readback.py::<module>.list_goal_todos::codec_read:load_registry#1",
-      "line": 64,
+      "line": 83,
       "column": 16,
       "kind": "codec_read",
       "api": "load_registry",

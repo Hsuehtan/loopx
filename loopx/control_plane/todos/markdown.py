@@ -35,25 +35,46 @@ def _render_settlement_plan(plan: object) -> list[str]:
     return lines
 
 
+def _render_todo_detail(payload: dict[str, Any]) -> str:
+    """Render the same lossless read lens, including missing/source metadata."""
+    metadata = {key: value for key, value in payload.items() if key != "todo"}
+    lines = ["# LoopX Todo Detail", "", "## Read metadata", "", "```json",
+             json.dumps(metadata, ensure_ascii=False, indent=2), "```"]
+    todo = payload.get("todo")
+    if isinstance(todo, dict):
+        lines.extend(["", "## Original Todo", "", todo["text"], "",
+                      "## Todo metadata", "", "```json",
+                      json.dumps({key: value for key, value in todo.items() if key != "text"},
+                                 ensure_ascii=False, indent=2), "```"])
+    return "\n".join(lines)
+
+
+def _render_todo_projection(payload: dict[str, Any]) -> str:
+    """Keep the existing provider-projection receipt presentation separate."""
+    return "\n".join(
+        [
+            "# LoopX Todo Markdown Projection",
+            "",
+            f"- ok: `{payload.get('ok')}`",
+            f"- goal_id: `{payload.get('goal_id')}`",
+            f"- dry_run: `{payload.get('dry_run')}`",
+            f"- executed: `{payload.get('executed')}`",
+            f"- changed: `{payload.get('changed')}`",
+            f"- source_authority: `{payload.get('source_authority')}`",
+            f"- provider_revision: `{payload.get('provider_revision')}`",
+            f"- todo_count: `{payload.get('todo_count')}`",
+            f"- parse_render_parity: `{payload.get('parse_render_parity')}`",
+            f"- narrative_preserved: `{payload.get('narrative_preserved')}`",
+            f"- error: `{payload.get('error')}`" if payload.get("error") else "",
+        ]
+    ).rstrip()
+
+
 def render_todo_markdown(payload: dict[str, Any]) -> str:
+    if payload.get("todo_detail_projection"):
+        return _render_todo_detail(payload)
     if payload.get("command") == "project-markdown":
-        return "\n".join(
-            [
-                "# LoopX Todo Markdown Projection",
-                "",
-                f"- ok: `{payload.get('ok')}`",
-                f"- goal_id: `{payload.get('goal_id')}`",
-                f"- dry_run: `{payload.get('dry_run')}`",
-                f"- executed: `{payload.get('executed')}`",
-                f"- changed: `{payload.get('changed')}`",
-                f"- source_authority: `{payload.get('source_authority')}`",
-                f"- provider_revision: `{payload.get('provider_revision')}`",
-                f"- todo_count: `{payload.get('todo_count')}`",
-                f"- parse_render_parity: `{payload.get('parse_render_parity')}`",
-                f"- narrative_preserved: `{payload.get('narrative_preserved')}`",
-                f"- error: `{payload.get('error')}`" if payload.get("error") else "",
-            ]
-        ).rstrip()
+        return _render_todo_projection(payload)
     if payload.get("command") == "list":
         if payload.get("thin"):
             field_projection = payload.get("todo_list_field_projection")

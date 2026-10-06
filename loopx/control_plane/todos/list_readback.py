@@ -11,6 +11,7 @@ from typing import Any, Literal
 from ...history import load_registry
 from ...paths import resolve_runtime_root
 from ...rollout_event_log import load_rollout_events, rollout_event_log_path
+from ..effect_runtime import effect_runtime_result
 from ..goals.state_resolution import resolve_goal_state
 from ..coordination.local_authority import (
     canonical_todo_items,
@@ -34,6 +35,21 @@ from .list_projection import (
 from .todo_index import MAX_TODO_INDEX_ROLLOUT_EVENTS_PER_GOAL
 
 
+def _restore_full_source_body(
+    detail: dict[str, Any], todo_id: str, source_items: list[dict[str, Any]],
+    *, required: bool,
+) -> None:
+    """Restore source text only after the shared reader has scoped the record."""
+    matches = [item for item in source_items
+        if item.get("todo_id") == todo_id
+        and item.get("role") == detail.get("role")
+        and item.get("archive_state", "active") == detail.get("archive_state", "active")]
+    if len(matches) == 1:
+        detail["text"] = str(matches[0].get("text") or "")
+    elif required:
+        raise ValueError("Todo detail cannot recover an unambiguous full source body")
+
+
 def list_goal_todos(
     *,
     registry_path: Path,
@@ -47,6 +63,7 @@ def list_goal_todos(
     runtime_root_arg: str | None = None,
     limit: int | None = None,
     thin: bool = False,
+    compact_detail: bool = False,
     read_scope: Literal["active", "completed_history"] = "active",
 ) -> dict[str, Any]:
     if read_scope not in {"active", "completed_history"}:
@@ -56,6 +73,8 @@ def list_goal_todos(
     normalized_todo_id = normalize_todo_id(todo_id) if todo_id else None
     if todo_id and not normalized_todo_id:
         raise ValueError("todo_id must use the public token shape todo_<letters-digits-underscore-hyphen>")
+    if compact_detail and (not normalized_todo_id or thin):
+        raise ValueError("--compact-detail requires --todo-id and cannot be combined with --thin")
     normalized_agent_id = normalize_todo_claimed_by(agent_id) if agent_id else None
     if agent_id and not normalized_agent_id:
         raise ValueError("agent_id must be a public-safe agent token such as codex-main-control")
@@ -159,13 +178,8 @@ def list_goal_todos(
                 state_text, goal=goal, state_path=resolved_state_file,
             )
             source_items = [*active["user"], *active["agent"], *archived]
-        detail = todos[0]
-        matches = [item for item in source_items
-            if item.get("todo_id") == normalized_todo_id
-            and item.get("role") == detail.get("role")
-            and item.get("archive_state", "active") == detail.get("archive_state", "active")]
-        if len(matches) == 1:
-            detail["text"] = str(matches[0].get("text") or "")
+        _restore_full_source_body(todos[0], normalized_todo_id, source_items,
+                                  required=compact_detail)
     unfiltered_count = projected.unfiltered_count
     uncapped_todo_count = projected.uncapped_todo_count
 
@@ -253,4 +267,8 @@ def list_goal_todos(
         if not todos:
             payload["not_found"] = True
     payload.update(summaries)
+    if compact_detail:
+        return effect_runtime_result(
+            "todo.context.page", {"detail_payload": payload}, large_local_snapshot=True,
+        )
     return compact_thin_todo_list_payload(payload) if thin else payload

@@ -466,6 +466,10 @@ def register_todo_command(
         ),
     )
     todo_parser.add_argument("--project", help="Project root. Defaults to the registry goal repo.")
+    todo_parser.add_argument(
+        "--compact-detail", dest="todo_compact_detail", action="store_true",
+        help="For todo list --todo-id, return one full source body with its identity, revision and relations; omit duplicate summary/list views. Incompatible with --thin.",
+    )
     todo_parser.add_argument("--state-file", help="Active goal state path. Defaults to the registry goal state_file.")
     todo_parser.add_argument("--dry-run", action="store_true", help="Preview the active-state edit without writing.")
     todo_parser.add_argument(

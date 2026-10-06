@@ -80,6 +80,7 @@ TODO_OPTION_FIELDS = (
     ("--agent-id", "agent_id"),
     ("--limit", "todo_limit"),
     ("--thin", "todo_thin"),
+    ("--compact-detail", "todo_compact_detail"),
     ("--state-file", "state_file"),
     ("--execute", "execute"),
     ("--provider-revision", "provider_revision"),
@@ -295,10 +296,11 @@ def validate_todo_list_options(args: argparse.Namespace) -> None:
             "agent_id",
             "todo_limit",
             "todo_thin",
+            "todo_compact_detail",
             "state_file",
         },
         "todo list only accepts --goal-id, optional --role, --status, --todo-id, "
-        "--agent-id, --limit, --thin, --project, --state-file, --dry-run, and "
+        "--agent-id, --limit, --thin, --compact-detail, --project, --state-file, --dry-run, and "
         "--format; "
         "unsupported: ",
     )
@@ -678,6 +680,8 @@ def validate_shared_todo_options(args: argparse.Namespace) -> None:
         )
     if args.todo_thin and args.todo_command != "list":
         raise ValueError("--thin is supported only by todo list")
+    if args.todo_compact_detail and args.todo_command != "list":
+        raise ValueError("--compact-detail is supported only by todo list")
 
 
 def validate_capability_gap_options(args: argparse.Namespace) -> None:

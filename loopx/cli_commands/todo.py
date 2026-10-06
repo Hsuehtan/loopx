@@ -336,6 +336,7 @@ def handle_todo_command(
                 agent_id=args.agent_id,
                 limit=args.todo_limit,
                 thin=bool(args.todo_thin),
+                compact_detail=bool(args.todo_compact_detail),
                 **_todo_path_args(args),
                 runtime_root_arg=runtime_root_arg,
             )
