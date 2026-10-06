@@ -119,9 +119,10 @@ class SForgeWorker(CodexAgent):
         self.turn_timeout = timeout_seconds - 160
         self.runtime = None
         self.prepared = False
-        # A single Codex call and a native Goal must not acquire an outer loop.
-        self.resume_cmd = (CodexAgent.resume_cmd if profile == "official" else
-                           "shared-scheduler" if profile.startswith("heartbeat-") else None)
+        # Only the official profile delegates continuation to SForge. Heartbeat
+        # workers already run a scheduler: restarting it after terminal/quiescent
+        # exit duplicates that owner and can exhaust the native resume limit.
+        self.resume_cmd = CodexAgent.resume_cmd if profile == "official" else None
 
     def install_stop_hook(self, backend, handle, log_dir, logger):
         self.environment = SForgeEnvironment(
@@ -232,8 +233,8 @@ class SForgeWorker(CodexAgent):
             env["LOOPX_PLANNING_TIMEOUT_SEC"] = str(self.runtime.planning_timeout)
             env["LOOPX_PLANNING_RESULT"] = "/opt/loopx-benchmark/control/planning-phase-001.json"
             command = [f"{_PYTHON}/bin/python3", "-m", "benchmark.runtime.sforge_entry", *command]
-        # Persist the phase deadline in the task environment. An abnormal outer
-        # resume preserves the remaining budget instead of granting another 18h.
+        # Persist the phase deadline for repeated command preparation. Reusing
+        # an entry command must never grant another full trial budget.
         deadline = "/opt/loopx-benchmark/control/phase-deadline"
         exports = " ".join(f"{key}={shlex.quote(value)}" for key, value in env.items())
         return (

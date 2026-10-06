@@ -65,7 +65,14 @@ The shared worker uses the remaining trial budget, retaining 160 seconds for
 startup/cleanup; natural completion determines continuation boundaries. A second
 scheduler wake alone does not prove resume: verify another actual model
 invocation with the same session identity. Native Goal owns its continuation
-without an outer resume loop. Explicit total timeouts can support diagnostics,
+without an outer resume loop. Heartbeat profiles now also disable SForge outer
+recovery: their LoopX scheduler owns repeated wakes, error backoff and terminal
+exit. Once it exits, SForge collects the final artifacts instead of restarting
+the scheduler. This changes the heartbeat transport, not LoopX's decision to
+continue or end a lane; scheduler exit alone does not prove task success.
+The official profile retains native outer recovery, and single/native Goal
+behavior is unchanged. Record a new runner revision for new attempts; do not
+rewrite earlier `outer_resume` receipts. Explicit total timeouts can support diagnostics,
 but short probes are not a prerequisite for running the intended protocol.
 
 The default `--feedback native` preserves native evaluator feedback.
