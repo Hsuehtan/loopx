@@ -18,7 +18,18 @@ loopx todo list --goal-id example-goal --todo-id todo_work
 loopx todo project-markdown --goal-id example-goal --execute
 ```
 
-Use `--no-follow-up` only when no successor is needed. Leased work additionally
+Use `--no-follow-up` only when no successor is needed. At replan, review unmet
+acceptance against the original authorized goal and current evidence. If a
+reasonable in-scope next step remains, continue or replan; a preassigned successor
+is not required. An empty Todo queue alone does not narrow the authorization.
+Otherwise explain why no reasonable in-scope next step remains, preserving unmet
+requirements rather than claiming them achieved. Do not invent work, expand
+authority or consume the remaining budget merely to stay active.
+
+This is agent decision guidance in the shared replan packet, including compact
+CLI and host envelopes. It does not add a machine judge of free-text acceptance,
+change lifecycle admission, or require a successor for every completed Todo.
+Leased work additionally
 requires its current `--task-lease-idempotency-key` and
 `--task-lease-expected-version`; owner confirmation is not a lease or a lifecycle
 grant. Chat users retry the same failed proposal. A stale proposal requires a
