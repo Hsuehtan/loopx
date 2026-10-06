@@ -416,9 +416,9 @@ class BenchmarkCodex(CodexOffline):
 
     async def _seed_phase(self, environment: BaseEnvironment, *, cwd: str) -> None:
         text = (
-            f"[P0] Execute benchmark phase {self._phase_number}. Read the exact "
-            f"current task from {self._task_document}; inspect the workspace, implement and "
-            "validate it."
+            f"[P0] Complete the task in {self._task_document}. Inspect the workspace, "
+            "implement and validate against the task's full requirements and acceptance "
+            "criteria. Keep unmet requirements explicit when judging task completion."
         )
         if self._seeded_todo_id:
             listed = await self._loopx(environment, [
