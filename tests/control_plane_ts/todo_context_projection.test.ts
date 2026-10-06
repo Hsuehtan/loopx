@@ -54,3 +54,32 @@ test("exact completed or missing records remain observations, never runnable wor
     assert.throws(() => page(records, options));
   }
 });
+
+test("explicit exact detail removes duplicate views without truncating or granting authority", () => {
+  const body = "Retain each independent acceptance clause. ".repeat(80) + "TAIL: no publication";
+  const todo = {todo_id: "todo_one", text: body, status: "blocked", resume_ready: false};
+  const payload = {todo_id_filter: "todo_one", matched: true, todo, todos: [todo],
+    agent_todos: {items: [todo]}, user_todos: {items: []},
+    authority_read: {provider_revision: "file:17", source_authority: "file_v0"},
+    relations: {required_write_scopes: ["docs/**"], resume_ready: false}};
+  const before = structuredClone(payload);
+  const result = projectTodoContextPage({detail_payload: payload});
+  assert.deepEqual(result.todo, todo);
+  assert.deepEqual(result.authority_read, payload.authority_read);
+  assert.deepEqual(result.relations, payload.relations);
+  for (const key of ["todos", "agent_todos", "user_todos", "execution_authorized"]) {
+    assert.equal(result[key], undefined);
+  }
+  assert.deepEqual(payload, before);
+  assert.equal(JSON.stringify(result).split(body).length - 1, 1);
+  for (const changed of [
+    {todo_id_filter: ""}, {todos: [todo, todo]}, {todo: {...todo, todo_id: "other"}},
+    {matched: false}, {todo: {...todo, text: 42}}, {todos: [{...todo, text: "Lost tail"}]},
+  ]) assert.throws(() => projectTodoContextPage({detail_payload: {...payload, ...changed}}));
+  assert.throws(() => projectTodoContextPage({detail_payload: payload, records: []}));
+  const missing = projectTodoContextPage({detail_payload: {
+    todo_id_filter: "todo_missing", matched: false, not_found: true, todo: null, todos: [],
+  }});
+  assert.equal(missing.not_found, true);
+  assert.equal((missing.todo_detail_projection as JsonObject).source_complete, false);
+});
