@@ -131,6 +131,15 @@ An enabled evidence or planning mode accepts an explicit
 }
 ```
 
+In evidence or planning mode, the Todo-bound settlement plan exposes this
+optional attachment next to its agent-owned CLI `durable_writeback` step.
+Quota/heartbeat, compact envelopes and Todo terminal-recovery plans share the
+same capability-owned guidance. Driver-owned callback plans do not advertise
+an attachment command they cannot consume. The ordinary command stays executable without
+an attachment; off mode adds no attachment metadata or evidence requirement.
+This point-of-use hint complements the turn-start read hook; it does not inspect
+local logs, generate findings, or require a no-evidence acknowledgement.
+
 Add `--explore-result-json result.json` to the ordinary admitted work
 writeback, retaining its Goal, Agent, Todo, Turn and delivery fields. The
 attachment is validated before primary commit and stored with that writeback.

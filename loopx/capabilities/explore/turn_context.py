@@ -1,10 +1,14 @@
 """Read adapters for Explore's typed, bounded turn context and existing hooks."""
 
+from collections.abc import Mapping
 from pathlib import Path
 import shlex
 
 from ...agent_registry import load_goal_from_registry, require_registered_agent_id
 from ...control_plane.capability_hooks import (
+    INTERACTION_PROJECTION_HOOK_RESULT_SCHEMA_VERSION,
+    InteractionProjectionHookRegistration,
+    dispatch_interaction_projection_hooks,
     TURN_START_HOOK_RESULT_SCHEMA_VERSION,
     TurnStartHookRegistration,
     dispatch_turn_start_hooks,
@@ -167,3 +171,45 @@ def extend_turn_start_dispatch(
     for key in ("registered_count", "invoked_count"):
         result[key] = int(result.get(key) or 0) + int(extra.get(key) or 0)
     return result
+
+
+def project_settlement_attachment(plan, *, registry_path: Path):
+    """Compose the existing optional result option into a Todo-bound CLI plan.
+
+    Registry access and hook dispatch are adapters. The typed Explore owner
+    supplies the guidance; neither the ordinary command nor obligations change.
+    """
+    identity = plan.get("identity") or {}
+    if not identity.get("todo_id") or not identity.get("agent_id"):
+        return plan
+
+    def produce():
+        _, graph, _ = _policy(registry_path, identity["goal_id"])
+        return {
+            "schema_version": INTERACTION_PROJECTION_HOOK_RESULT_SCHEMA_VERSION,
+            "hook_id": "explore.settlement_attachment",
+            "capability_id": "explore",
+            "phase": "interaction_projection",
+            "status": "candidate" if graph else "not_applicable",
+            "projection_slot": "explore_result_attachment" if graph else None,
+            "payload": {} if graph else None,
+        }
+
+    dispatch = dispatch_interaction_projection_hooks((InteractionProjectionHookRegistration(
+        hook_id="explore.settlement_attachment", capability_id="explore",
+        projection_slots=("explore_result_attachment",),
+        requested_read_scope=("goal.explore_policy",), producer=produce,
+    ),))
+    attachment = dispatch["projections"].get("explore_result_attachment")
+    if attachment is None:
+        return ({**plan, "capability_hook_failures": dispatch["failures"]}
+                if dispatch["failures"] else plan)
+    # Only the result-aware refresh command can consume this attachment. The
+    # caller's identity, lease, validation, spend and recovery rules stay intact.
+    steps = []
+    for step in plan.get("ordered_steps", []):
+        if (isinstance(step, Mapping) and step.get("kind") == "durable_writeback"
+                and step.get("command_template")):
+            step = {**step, "optional_attachments": [attachment]}
+        steps.append(step)
+    return {**plan, "ordered_steps": steps}

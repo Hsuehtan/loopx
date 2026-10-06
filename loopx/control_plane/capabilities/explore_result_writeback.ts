@@ -5,6 +5,17 @@ import {EffectRuntimeRequestError} from "../effect_runtime_errors.ts";
 import {requireJsonObject, requireStringLiteral} from "../runtime_decode.ts";
 
 export const EXPLORE_RESULT_ATTACHMENT_SCHEMA = "explore_result_attachment_v0";
+/** Shared point-of-use guidance; optional metadata never changes settlement. */
+export function exploreResultWritebackAffordance(): JsonObject {
+  return {
+    capability_id: "explore",
+    option: "--explore-result-json <result.json>",
+    attachment_schema: EXPLORE_RESULT_ATTACHMENT_SCHEMA,
+    required: false,
+    guidance: "When work yields reusable evidence, attach node_id, question, applicability, input_revision, observation, interpretation, status and evidence_refs to ordinary Todo/Turn refresh-state. This creates the question if absent, preserves existing node state, and links the result to this Todo. Use tentative for inconclusive or prerequisite failures; a score alone does not establish refutation. No attachment is required for routine work without new evidence.",
+  };
+}
+
 const FIELDS = ["schema_version", "node_id", "question", "applicability", "input_revision",
   "observation", "interpretation", "status", "evidence_refs"];
 function text(value: unknown, field: string, limit: number): string {

@@ -734,6 +734,15 @@ def build_live_quota_should_run_decision(
             )
         if context is not None:
             interaction["agent_context"] = context
+    # Capability composition happens after recovery may replace the plan, and
+    # before Turn/envelope consumers copy the shared live decision.
+    from ...capabilities.explore.turn_context import project_settlement_attachment
+
+    cli = (payload.get("interaction_contract") or {}).get("cli_channel")
+    if isinstance(cli, dict) and isinstance(cli.get("settlement_plan"), Mapping):
+        cli["settlement_plan"] = project_settlement_attachment(
+            cli["settlement_plan"], registry_path=registry_path,
+        )
     bind_scheduler_followup_cli_routes(
         payload,
         registry_path=registry_path,

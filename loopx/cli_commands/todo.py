@@ -150,12 +150,16 @@ def _completion_settlement_plan(
                 path_args += argument
     prefix = (f"loopx --registry {shlex.quote(str(registry_path))}"
               f" --runtime-root {shlex.quote(str(runtime_root))}")
-    return build_turn_scoped_cli_settlement_plan(
+    plan = build_turn_scoped_cli_settlement_plan(
         goal_id=identity.goal_id, agent_id=identity.agent_id, todo_id=identity.todo_id,
         turn_instance_id=identity.turn_instance_id, command_prefix=prefix,
         scoped_cli_args="", lifecycle_actor_args=actor_args, writeback_path_args=path_args,
         goal_ref=goal_ref,
     ).as_dict()
+
+    from ..capabilities.explore.turn_context import project_settlement_attachment
+
+    return project_settlement_attachment(plan, registry_path=registry_path)
 
 
 def _validated_replan_successor_obligation(
