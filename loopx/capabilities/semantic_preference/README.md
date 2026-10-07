@@ -238,6 +238,23 @@ No copying host conversations, cross-home rebinding or implicit global corpus.
 Moving the Goal state file requires an explicit context migration; it is not
 silently treated as the same private scope.
 
+### Fresh Turn context without a separate preference read
+
+Ordinary quota guards and TurnEnvelope now observe the exact Agent preference
+scope even when no store exists. `work_context.observations` carries a fresh
+`empty` hook observation: clear cached preference context and do not probe the
+same empty source again. Missing observations mean unknown, not empty. A known
+filesystem permission denial and other source failures remain unavailable
+context, with the existing dependent-action hold and independent-work policy.
+This changes the default empty-source projection; it grants no work authority.
+
+Each guard rereads the source without a negative cache. Newly written preferences,
+corrections, retirements and expiry therefore appear in the next guard. A single
+capability-owned snapshot supplies both discovery and current bodies, avoiding
+an additional provider read after discovery. Read delivered current bodies once;
+only remaining `required_reads` require another interaction. The explicit `agent
+read` command remains for corrections and actions requiring a newer view.
+
 ### Memory service providers and the next integration boundary
 
 The extension boundary is a **memory service**, not just a File/SQLite driver.
