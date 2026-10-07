@@ -175,7 +175,10 @@ def _turn_start_required_reads(
         projected.append(
             {
                 key: read[key]
-                for key in ("kind", "command", "reason", "source", "ordering", "prompt_budget_bytes")
+                for key in (
+                    "kind", "command", "reason", "source", "ordering",
+                    "hook_id", "capability_id", "prompt_budget_bytes",
+                )
                 if key in read
             }
         )

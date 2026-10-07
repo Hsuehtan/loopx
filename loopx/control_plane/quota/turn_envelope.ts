@@ -297,7 +297,8 @@ function responsePlan(interaction: JsonObject): JsonObject | null {
 }
 
 function requiredReads(interaction: JsonObject, payload: JsonObject): JsonObject[] {
-  const raw = interaction.required_reads || payload.required_reads;
+  const raw = object(interaction.agent_channel).required_reads
+    ?? interaction.required_reads ?? payload.required_reads;
   if (!Array.isArray(raw)) return [];
   const result: JsonObject[] = [];
   for (const value of raw) {
@@ -313,6 +314,12 @@ function requiredReads(interaction: JsonObject, payload: JsonObject): JsonObject
     for (const field of ["kind", "reason", "source"]) {
       const rendered = text(item[field], 240);
       if (rendered) compact[field] = rendered;
+    }
+    // These are existing obligation coordinates, not provider diagnostics.
+    // Keep identity and ordering intact, just like the executable command.
+    for (const field of ["ordering", "hook_id", "capability_id"]) {
+      const value = scalarString(item[field], `required read ${field}`);
+      if (value) compact[field] = value;
     }
     result.push(compact);
   }

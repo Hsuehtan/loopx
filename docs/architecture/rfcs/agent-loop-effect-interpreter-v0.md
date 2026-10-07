@@ -454,7 +454,7 @@ Current source-path audit for the first convergence slice:
 | Execution fact | Existing owner / projection | Remaining boundary |
 |---|---|---|
 | Goal/Agent/Todo identity | Quota selection and receipt; envelope actor, selected Todo and signed settlement identity | Capture identity and mutation-time validation remain necessary; display identity is not an execution grant |
-| Full requirements | Interaction required reads; compact commands retained verbatim | Shared full Goal/Todo reads are proposed in #5794; neither a summary nor a source hash proves that a host read them |
+| Full requirements | Authoritative Agent-channel required reads; exact commands, ordering and hook/capability coordinates retained across quota and envelope | Shared full Goal/Todo reads are proposed in #5794; neither a summary nor a source hash proves that a host read them |
 | Capability refusal | Existing quota `capability_gate_v0`; compact boundary now retains exact `required`/`missing` arrays and historical source names | This repairs omitted facts, not readiness policy or capability activation |
 | Selection / claim / lease | Selected Todo, action portfolio and current owning transactions | Compact selected ownership is not a fresh lease; retain the captured source and revalidate at the owning mutation |
 | Replan / Goal closure | Replan action packet, contract capsule and vision audit | Full evidence remains on authorized detail paths; Todo completion is not Goal completion |
@@ -470,6 +470,15 @@ provider-failure and settlement cases remain covered separately, and do not
 qualify installed App convergence or model costs. Keep all three Todos below
 open until their own acceptance is met; this inventory is not blanket permission
 to delete the remaining Python IO adapters.
+
+The required-read correction now preserves the existing obligation list through
+quota transport, signed projection and both shipped host prompt adapters. Real
+legacy/File/SQLite CLI cases cover long quoted commands, unchanged capability
+refusal and signature rejection after coordinate mutation. An explicit empty
+Agent-channel list suppresses stale fallback reads. This bounded projection
+repair does not produce the full Goal/Todo reads proposed in #5794 or prove that
+a live host executed them. Recheck integration with that proposal before merging;
+retain the Python IO adapters that still have real callers.
 
 Remaining implementation Todos, in dependency order:
 

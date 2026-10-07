@@ -611,6 +611,33 @@ test("transaction boundary rejects malformed prepared facts", () => {
 });
 
 
+test("required reads prefer the agent channel and retain obligation identity", () => {
+  const source = payload();
+  const read = {
+    kind: "agent_preferences", command: "loopx inspect --fresh",
+    source: "turn_start_capability_hook", ordering: "before_work",
+    hook_id: "semantic_preference.agent_context", capability_id: "semantic-preference",
+  };
+  const agent = (source.interaction_contract as JsonObject).agent_channel as JsonObject;
+  agent.required_reads = [read];
+  (source.interaction_contract as JsonObject).required_reads = [{command: "old root read"}];
+  source.required_reads = [{command: "old payload read"}];
+  const render = () => buildTurnEnvelope({payload: source,
+    protocol_action_fields: protocolActionFields, scheduler_execution_args: ""});
+  const result = render();
+  assert.deepEqual(result.required_reads, [read]);
+  const tampered = structuredClone(result);
+  ((tampered.required_reads as JsonObject[])[0]).ordering = "after_work";
+  assert.notDeepEqual(turnEnvelopeActionSignatureDocument(tampered),
+    quotaActionSignatureDocument(source, protocolActionFields));
+  agent.required_reads = [];
+  assert.deepEqual(render().required_reads, []);
+  delete agent.required_reads;
+  assert.deepEqual(render().required_reads, [{command: "old root read"}]);
+  delete (source.interaction_contract as JsonObject).required_reads;
+  assert.deepEqual(render().required_reads, [{command: "old payload read"}]);
+});
+
 test("all required reads survive compaction and later reads affect the signature", () => {
   const source = payload();
   // The sixth read used to disappear; long quoted routes were also rewritten.
@@ -633,6 +660,20 @@ test("all required reads survive compaction and later reads affect the signature
   assert.notDeepEqual(turnEnvelopeActionSignatureDocument(tampered), quotaActionSignatureDocument(source, protocolActionFields));
   reads[5].command += " --fresh";
   assert.notEqual((render().action_signature as JsonObject).source_hash, (result.action_signature as JsonObject).source_hash);
+});
+
+test("required read ordering and hook identity survive legacy carriers without private diagnostics", () => {
+  const source = payload();
+  const read = {command: "loopx context read", ordering: "before_work",
+    hook_id: "fixture.context", capability_id: "fixture",
+    private_detail: "provider payload is not an execution fact"};
+  source.required_reads = [read];
+  const result = buildTurnEnvelope({payload: source,
+    protocol_action_fields: protocolActionFields, scheduler_execution_args: ""});
+  assert.deepEqual(result.required_reads, [{command: read.command, ordering: read.ordering,
+    hook_id: read.hook_id, capability_id: read.capability_id}]);
+  assert.deepEqual(quotaActionSignatureDocument(source, protocolActionFields),
+    turnEnvelopeActionSignatureDocument(result));
 });
 
 

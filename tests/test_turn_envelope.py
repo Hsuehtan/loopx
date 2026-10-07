@@ -361,6 +361,41 @@ def test_turn_envelope_compacts_replan_help_without_losing_successor_execution()
     ) == turn_envelope_action_signature_document(envelope)
 
 
+@pytest.mark.parametrize("carrier", ["agent_channel", "interaction", "payload"])
+def test_required_read_obligations_reach_signed_host_requests(carrier: str) -> None:
+    from loopx.control_plane.turn_driver.codex_cli import _prompt
+    from loopx.control_plane.turn_driver.host_candidate import render_prompt
+
+    source = _full_decision()
+    read = {
+        "command": "loopx context read --source 'quoted path'",
+        "ordering": "before_work",
+        "hook_id": "fixture.context",
+        "capability_id": "fixture",
+    }
+    interaction = source["interaction_contract"]
+    if carrier == "agent_channel":
+        interaction["agent_channel"]["required_reads"] = [read]
+        interaction["required_reads"] = [{"command": "stale root read"}]
+    elif carrier == "interaction":
+        interaction["required_reads"] = [read]
+    else:
+        del interaction["required_reads"]
+        source["required_reads"] = [read]
+    envelope = build_turn_envelope(source)
+    request = {"turn_envelope": envelope}
+    authority = extract_turn_authority(request)
+    assert authority["required_reads"] == [read]
+    # Both shipped host renderers receive the exact obligations, not a count.
+    assert json.dumps(read, sort_keys=True, separators=(",", ":")) in render_prompt(authority)
+    assert json.dumps(read, sort_keys=True, separators=(",", ":")) in _prompt(request)
+    for field in ("command", "ordering", "hook_id", "capability_id"):
+        tampered = deepcopy(request)
+        tampered["turn_envelope"]["required_reads"][0][field] = "different"
+        with pytest.raises(ValueError, match="signature"):
+            extract_turn_authority(tampered)
+
+
 def test_turn_envelope_derives_canonical_slots_through_effect_turn() -> None:
     source = _full_decision()
     turn = interpret_quota_should_run_packet(

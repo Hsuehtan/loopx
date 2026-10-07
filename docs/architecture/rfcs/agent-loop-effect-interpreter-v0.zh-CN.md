@@ -325,7 +325,7 @@ envelope 投影，Codex CLI 保持关闭隔离；这不代表安装态 heartbeat
 | 执行事实 | 既有 owner／投影 | 保留的边界 |
 |---|---|---|
 | Goal/Agent/Todo 身份 | quota 选择及回执；envelope actor、selected Todo 和签名结算身份 | 捕获身份与写入时校验仍必要；展示身份不授予执行权 |
-| 完整要求 | interaction 必读及原样保留的短包命令 | 完整 Goal/Todo 共用读取在 #5794 提案中；摘要或源 hash 不证明宿主已读 |
+| 完整要求 | Agent channel 权威必读；quota 与短包原样保留命令、顺序及 hook/capability 身份 | 完整 Goal/Todo 共用读取在 #5794 提案中；摘要或源 hash 不证明宿主已读 |
 | 能力拒绝 | 既有 capability_gate_v0；短包保留原样 required/missing 与源中历史字段 | 修复事实遗漏，不改变就绪策略或能力开启 |
 | 选择／claim／lease | selected Todo、action portfolio 及当前所属事务 | 短包归属不是新鲜 lease；保留捕获源并在所属写入入口复核 |
 | replan／Goal 收尾 | replan action packet、contract capsule 和 vision audit | 完整证据仍走有权限的详情；Todo 完成不证明 Goal 完成 |
@@ -337,6 +337,12 @@ envelope 投影，Codex CLI 保持关闭隔离；这不代表安装态 heartbeat
 不重写历史签名、不增覆盖版本、准入规则或 Python 策略。宿主 provider 失败和
 结算另有覆盖，仍不证明安装态 App 收敛或模型成本。以下三项继续按各自验收保持
 未完成；这份核对不授权批量删除剩余 Python IO adapter。
+
+必读投影修正保留已有义务列表，贯穿 quota 传输、签名投影和两个已交付宿主
+prompt adapter。真实 legacy/File/SQLite CLI 覆盖长引用命令、原 capability 拒绝
+和读取坐标变更后的签名拒绝；Agent channel 明确空列表不回退到过期读取。
+这批不生成 #5794 提案中的完整 Goal/Todo 读取，也不证明活跃宿主已经执行；
+合并时仍需对该提案做集成复核，保留有真实调用方的 Python IO adapter。
 
 后续实施 Todo 按依赖顺序推进：
 

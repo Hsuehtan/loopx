@@ -121,6 +121,21 @@ envelope; matching hashes prove the covered action dimensions agree for that
 projection. They do not prove that every possible quota state has test
 coverage.
 
+Required reads use the authoritative `interaction_contract.agent_channel` list,
+including an explicit empty list. Historical interaction-root and payload lists
+remain fallbacks when that carrier is absent. Commands retain their exact bytes;
+existing `ordering`, `hook_id` and `capability_id` coordinates survive both the
+quota transport and the signed envelope projection. Provider diagnostics remain
+outside this whitelist. A matching signature cannot prove that omitted reads
+were complete or that a host executed them. Newly projected decisions retain
+these corrected facts in the existing required-read dimension; saved signatures
+are not rewritten, and no new execution permission is granted.
+
+中文：必读列表优先使用 agent_channel 的权威列表，包括明确的空列表；缺失时
+才兼容旧位置。命令原样保留，已有读取顺序、hook 和 capability 身份贯穿 quota
+传输与签名短包，私有诊断不进入该列表。修正新投影不重写历史签名；签名相等
+不能证明读取完整或宿主已经执行，也不提供新的权限。
+
 Action-signature coverage is versioned independently from the envelope schema.
 `turn_envelope_action_dimensions_v0` covers the original action projection;
 `turn_envelope_action_dimensions_v1` additionally covers a blocking user

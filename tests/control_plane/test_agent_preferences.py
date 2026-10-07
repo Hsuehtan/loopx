@@ -10,10 +10,25 @@ from tests.control_plane.test_quota_settlement_cli import (
 )
 
 
-def test_explicit_correction_reaches_fresh_turn_without_changing_authority(tmp_path):
+@pytest.mark.parametrize("provider", ["legacy", "file", "sqlite"])
+def test_explicit_correction_reaches_fresh_turn_without_changing_authority(tmp_path, monkeypatch, provider):
     nested = tmp_path / ("workspace  dir" * 12)
     nested.mkdir()
-    _, runtime, registry = _write_fixture(nested, required_capability="network")
+    project, runtime, registry = _write_fixture(nested, required_capability="network")
+    if provider != "legacy":
+        from canonical_authority_fixture import initialize_canonical_authority, isolate_sqlite_runtime
+        from loopx.control_plane.coordination.runtime_shadow import build_todo_runtime_shadow_projection
+        from loopx.control_plane.todos.active_state_todo_parser import parse_active_state_todos
+
+        if provider == "sqlite":
+            isolate_sqlite_runtime(tmp_path, monkeypatch)
+        goal = json.loads(registry.read_text())["goals"][0]
+        state = project / goal["state_file"]
+        # Initialize from the complete source owner, never a bounded quota display.
+        fields = parse_active_state_todos(state.read_text(), goal=goal, item_limit=None)
+        projection = build_todo_runtime_shadow_projection(goal_id=GOAL_ID,
+            todos=fields["agent_todos"]["items"] + fields.get("user_todos", {}).get("items", []), handoff_mode="soft_claim")
+        initialize_canonical_authority(runtime, GOAL_ID, projection, state_path=state, provider=provider)
     before = registry.read_bytes()
     scope = ("--goal-id", GOAL_ID, "--agent-id", AGENT_ID)
     def call(action, *args):
@@ -44,8 +59,14 @@ def test_explicit_correction_reaches_fresh_turn_without_changing_authority(tmp_p
     preference_read = next(x for x in reads if x["kind"] == "agent_preferences")
     assert len(preference_read["command"]) > 360
     assert "semantic-preference agent read" in json.dumps(plan), plan
-    assert any(x["command"] == preference_read["command"]
-               for x in plan["turn_envelope"]["required_reads"]), plan
+    assert preference_read in plan["turn_envelope"]["required_reads"], plan
+    authority = extract_turn_authority(plan)
+    assert preference_read in authority["required_reads"]
+    changed = deepcopy(plan)
+    next(x for x in changed["turn_envelope"]["required_reads"]
+         if x["command"] == preference_read["command"])["ordering"] = "after_work"
+    with pytest.raises(ValueError, match="signature"):
+        extract_turn_authority(changed)
     rc, corrected = call("remember", "--key", "review.collaboration", "--statement", "Do not delegate review.",
         "--source-ref", "owner-message-2", "--source-quote", "Stop asking a reviewer.",
         "--expected-revision", fresh["current"]["revision"], "--operation-id", "correct-2", "--execute")
