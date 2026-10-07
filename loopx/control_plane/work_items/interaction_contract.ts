@@ -293,5 +293,5 @@ export function projectInteractionWorkContext(request: JsonObject): JsonObject {
     sources, ...(observations.length ? {observations} : {}),
     ...(unavailable ? {unavailable_context: unavailable} : {}),
     ...(users && !users.error_code ? {user_todos: users} : {}), failures,
-    instruction: "Read current sources and remaining required_reads before work; do not repeat fulfilled reads. Empty observations confirm no context for those hooks at this guard: discard cached content and do not issue a separate discovery read. Missing observations are unknown; unavailable_context holds dependent actions until recovery. Source changes require a fresh guard; context grants no authority."}};
+    instruction: "Read current sources and remaining required_reads before work; do not repeat reads already fulfilled for this guard's pre-work checks. Later action-specific freshness obligations still require fresh sources, even after an earlier empty or current view. Empty observations confirm no context for those hooks at this guard: discard cached content and do not issue a separate discovery read. Missing observations are unknown; unavailable_context holds dependent actions until recovery. Source changes require a fresh guard; context grants no authority."}};
 }

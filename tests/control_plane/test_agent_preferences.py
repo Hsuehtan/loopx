@@ -90,6 +90,11 @@ def test_fresh_empty_and_current_preferences_reach_turn_without_extra_reads(tmp_
         "--source-ref", "owner-message-2", "--source-quote", "Stop asking a reviewer.",
         "--expected-revision", fresh["current"]["revision"], "--operation-id", "correct-2", "--execute")
     assert rc == 0 and corrected["status"] == "applied", corrected
+    # A fulfilled pre-work read is not a fresh view for a later external action.
+    assert preference["content"]["current"]["items"][0]["statement"] == "Ask designated-reviewer before merging."
+    rc, action_view = call("read")
+    assert rc == 0 and action_view["current"]["items"][0]["statement"] == "Do not delegate review.", action_view
+    assert "Re-read before a preference-dependent external action." in action_view["current"]["instructions"]
     rc, next_quota = _run_cli(registry, runtime, "quota", "should-run", *scope)
     contents = next(x["content"] for x in next_quota["interaction_contract"]["agent_channel"]["work_context"]["sources"]
         if x.get("kind") == "agent_preferences")

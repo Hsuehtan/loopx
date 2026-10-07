@@ -39,6 +39,9 @@ test("fresh empty hook context is visible without a read; missing and denied sta
   assert.deepEqual(context.sources, []);
   assert.deepEqual(context.observations, [{hook_id: "semantic_preference.agent_context",
     capability_id: "semantic-preference", status: "empty"}]);
+  assert.match(String(context.instruction), /fulfilled for this guard's pre-work checks/);
+  assert.match(String(context.instruction), /Later action-specific freshness obligations still require fresh sources/);
+  assert.match(String(context.instruction), /even after an earlier empty or current view/);
   assert.deepEqual(request, before);
   const unknown = projectInteractionWorkContext({required_reads: [], source_results: []}).work_context as JsonObject;
   assert.equal(unknown.observations, undefined);
