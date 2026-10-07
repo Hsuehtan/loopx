@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {JsonObject} from "../../loopx/control_plane/effect_program.ts";
 import {TODO_SUMMARY_PROJECTION_COLUMNS, projectTodoSummary} from "../../loopx/control_plane/todos/summary_projection.ts";
+import {projectAdvancementFrontier} from "../../loopx/control_plane/todos/frontier_revision.ts";
 import {productionScaleCoordinationFixture} from "./production_scale_coordination_fixture.ts";
 import {evaluateTodoSuccession, SUCCESSION_FACT_COLUMNS, SUCCESSION_EVALUATION_COLUMNS} from "../../loopx/control_plane/todos/succession.ts";
 
@@ -29,6 +30,56 @@ function fused(rows: JsonObject[], facts: JsonObject[], evaluations = evaluateTo
     evaluations: evaluations.map(evaluation => SUCCESSION_EVALUATION_COLUMNS.map(name => evaluation[name])),
   }});
 }
+
+function withFrontier(rows: JsonObject[]): JsonObject {
+  const facts = rows.map(row => ({todo_id: row.todo_id, status: row.status, active: true,
+    advancement: row.task_class === "advancement_task", no_followup: row.no_followup,
+    successors: [], superseded_by: null, unblocks: null, resumes: null, handoff: false,
+    done: row.done, route_flag: null, legacy_route_label: "", context_fields: []}));
+  return {...fused(rows, facts), schema_version: "todo_summary_projection_request_v3",
+    frontier_rows: rows.map(row => ({id: row.todo_id, claim: row.claim, excluded: row.excluded,
+      advancement: row.task_class === "advancement_task", actionable: row.status === "open",
+      updated: row.updated_at, serialized: JSON.stringify({todo_id: row.todo_id, status: row.status})}))};
+}
+
+test("summary frontier uses selected full-source rows before caps and retains the existing index codec", () => {
+  const rows = Array.from({length: 32}, (_, index) => row({todo_id: `todo_batch_${index}`,
+    claimed: true, claim: index < 24 ? "a" : "b", updated_at: "2026-01-01T00:00:00.000001Z"}));
+  const carrier = withFrontier(rows), before = structuredClone(carrier);
+  const original = projectAdvancementFrontier({schema_version: "todo_frontier_revision_request_v0",
+    operation: "index", rows: carrier.frontier_rows}).index;
+  for (const limit of [null, 0, 1, 12]) {
+    const result = projectTodoSummary({...carrier, item_limit: limit});
+    assert.deepEqual(result.fields.advancement_frontier_revision_index, original);
+    const selected = projectTodoSummary({...carrier, item_limit: limit,
+      selection: {role: "agent", status: null, todo_id: null, agent_id: "a"}});
+    const index = selected.fields.advancement_frontier_revision_index as JsonObject;
+    assert.deepEqual(index.claimed_advancement_counts, {a: 24});
+    assert.equal(selected.fields.total_count, 24);
+  }
+  assert.deepEqual(carrier, before);
+  assert.equal(projectTodoSummary(fused([], [])).fields.advancement_frontier_revision_index, undefined);
+  assert.deepEqual((projectTodoSummary(withFrontier([])).fields.advancement_frontier_revision_index as JsonObject).all,
+    {complete: false});
+});
+
+test("summary frontier rejects absent, reordered and conflicting facts instead of mixing snapshots", () => {
+  const carrier = withFrontier([row({todo_id: "todo_first", claimed: true, claim: "a", updated_at: "2026-01-01T00:00:00Z"}),
+    row({todo_id: "todo_second", updated_at: "2026-01-01T00:00:00Z"})]);
+  for (const mutate of [
+    (value: JsonObject) => { value.frontier_rows = null; },
+    (value: JsonObject) => { value.frontier_rows = []; },
+    (value: JsonObject) => { (value.frontier_rows as JsonObject[]).reverse(); },
+    ...["claim", "excluded", "advancement", "actionable", "updated"].map(key => (value: JsonObject) => {
+      (value.frontier_rows as JsonObject[])[0][key] = {claim: "b", excluded: ["b"], advancement: false,
+        actionable: false, updated: "2026-02-01T00:00:00Z"}[key];
+    }),
+  ]) {
+    const changed = structuredClone(carrier); mutate(changed);
+    assert.throws(() => projectTodoSummary(changed), /summary frontier/);
+  }
+  assert.throws(() => projectTodoSummary({...carrier, role: "user"}), /non-Agent summary/);
+});
 
 test("fused summary preserves legacy decisions and full-source inferred edges through filtering", () => {
   const facts = [{todo_id: "todo_source", status: "done", active: true, advancement: true,

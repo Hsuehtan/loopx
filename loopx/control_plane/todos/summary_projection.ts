@@ -5,6 +5,7 @@ import {EffectRuntimeRequestError} from "../effect_runtime_errors.ts";
 import {requireBoolean, requireJsonObject, requireStringLiteral} from "../runtime_decode.ts";
 import {parseTodoTimestampMicros} from "../runtime_timestamp.ts";
 import {projectTodoSummaryLanes, type TodoSummaryLane} from "./summary_lanes.ts";
+import {projectSummaryFrontierIndex} from "./frontier_revision.ts";
 import {projectTodoClosure, projectTodoSuccession, SUCCESSION_FACT_COLUMNS, SUCCESSION_EVALUATION_COLUMNS} from "./succession.ts";
 
 type Format = "raw" | "compact" | "active" | "recent" | "gap";
@@ -100,7 +101,8 @@ function claimedVisibility(indices: readonly number[], rows: readonly JsonObject
 export function projectTodoSummary(value: unknown): SummaryProjection {
   const request = requireJsonObject(value, "Todo summary request");
   if (request.schema_version !== "todo_summary_projection_request_v1" &&
-      request.schema_version !== "todo_summary_projection_request_v2") {
+      request.schema_version !== "todo_summary_projection_request_v2" &&
+      request.schema_version !== "todo_summary_projection_request_v3") {
     throw new EffectRuntimeRequestError("Todo summary request schema mismatch");
   }
   const role = request.role === null ? null : requireStringLiteral(request.role, ["user", "agent"], "role");
@@ -142,6 +144,13 @@ export function projectTodoSummary(value: unknown): SummaryProjection {
     monitor_schedule_gap_count: selected.monitor_schedule_gap_items.length,
   };
   const lanes: Record<string, DisplayLane> = {};
+  if (request.schema_version === "todo_summary_projection_request_v3") {
+    if (role === "agent") {
+      fields.advancement_frontier_revision_index = projectSummaryFrontierIndex(request.frontier_rows, rows, source);
+    } else if (request.frontier_rows !== null) {
+      throw new EffectRuntimeRequestError("non-Agent summary must omit frontier source facts");
+    }
+  }
   const lane = (name: string, indices: readonly number[], cap: number | null = null, format: Format = "compact") => {
     lanes[name] = {indices: cap === null ? [...indices] : indices.slice(0, cap), format};
   };

@@ -38,7 +38,7 @@ from .contract import (
     todo_done_for_status,
 )
 from .completion_validation_projection import project_completion_validation_authority
-from .frontier_revision import attach_advancement_frontier_revision_index
+from .frontier_revision import frontier_source_facts, TODO_FRONTIER_REVISION_INDEX_SCHEMA_VERSION
 from .handoff_gate import build_todo_handoff_gate_states
 from .handoff_note import attach_todo_handoff_note
 from .todo_semantics import (
@@ -84,7 +84,7 @@ TODO_ARCHIVE_STATE_ACTIVE = "active"
 # facts: repeating every key name per Todo pushed a long-history request past the
 # effect-runtime request budget. The typed owner decodes the declared columns
 # back into row objects before validating them, so no cell changes meaning.
-SUMMARY_PROJECTION_REQUEST_SCHEMA_VERSION = "todo_summary_projection_request_v2"
+SUMMARY_PROJECTION_REQUEST_SCHEMA_VERSION = "todo_summary_projection_request_v3"
 SUMMARY_PROJECTION_COLUMNS = (
     "status", "done", "task_class", "has_resume", "resume_ready", "resume_evaluated",
     "acceptance_blocked", "claimed", "preferred", "watch_only", "due_at", "expires_at",
@@ -874,6 +874,7 @@ def _project_summary(items: list[dict[str, Any]], preferred_todo_ids: set[str] |
             "columns": list(SUMMARY_PROJECTION_COLUMNS),
             "rows": [[row[name] for name in SUMMARY_PROJECTION_COLUMNS] for row in rows],
             "succession": succession_request(items, reuse=True),
+            "frontier_rows": frontier_source_facts(items) if role == "agent" else None,
             "observed_at": now_utc().timestamp(),
             "selection": selection, "role": role, "source_section": source_section,
             "item_limit": item_limit, "full_selection": full_selection,
@@ -906,6 +907,10 @@ def _project_summary(items: list[dict[str, Any]], preferred_todo_ids: set[str] |
     summary = result.get("fields")
     if not isinstance(summary, dict) or summary.get("schema_version") != "todo_summary_v0":
         raise ValueError("invalid typed Todo summary fields")
+    if role == "agent":
+        index = summary.get("advancement_frontier_revision_index")
+        if not isinstance(index, dict) or index.get("schema_version") != TODO_FRONTIER_REVISION_INDEX_SCHEMA_VERSION:
+            raise ValueError("invalid typed Todo summary frontier index")
     warning = summary.get("todo_succession_warning")
     warning_action = warning.get("recommended_action") if isinstance(warning, dict) else None
     if summary.get("completed_without_successor_count") and not isinstance(warning_action, str):
@@ -1012,7 +1017,6 @@ def compact_evaluated_todo_group(
         return None
     summary: dict[str, Any] = projected["summary"]
     handoff_gates = build_todo_handoff_gate_states(items, evaluations=projected["succession"])
-    attach_advancement_frontier_revision_index(summary, items, role=role)
     attach_active_vision_waits(
         summary, vision_runs, role=role, items=items,
         lineage_items=lineage_items,

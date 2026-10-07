@@ -103,10 +103,3 @@ def build_advancement_frontier_revision_index(
     if not isinstance(index, dict):
         raise TypeError("typed frontier revision response index must be an object")
     return index
-
-
-def attach_advancement_frontier_revision_index(
-    summary: dict[str, Any], source_items: list[dict[str, Any]], *, role: str | None,
-) -> None:
-    if role == "agent":
-        summary["advancement_frontier_revision_index"] = build_advancement_frontier_revision_index(source_items)

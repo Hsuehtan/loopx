@@ -154,3 +154,62 @@ def test_filtered_summary_fuses_validation_without_another_succession_rpc(monkey
     import pytest
     with pytest.raises(Exception, match="matching full-source"):
         filtered_todo_summary(source, role="agent", todo_id="todo_summary_1")
+
+
+def test_frontier_identity_precedes_display_caps_and_respects_selection():
+    from loopx.control_plane.todos.goal_todo_projection import filtered_todo_summary
+
+    items = [row(i, claimed_by="agent-a" if i < 24 else "agent-b",
+                 updated_at="2026-01-01T00:00:00.000001Z") for i in range(32)]
+    full = summarize(items, item_limit=None)
+    capped = summarize(items, item_limit=1)
+    assert capped["advancement_frontier_revision_index"] == full["advancement_frontier_revision_index"]
+    index = full["advancement_frontier_revision_index"]
+    assert index["claimed_advancement_counts"] == {"agent-a": 24, "agent-b": 8}
+    selected = filtered_todo_summary(full, role="agent", agent_id="agent-a", item_limit=1)
+    assert selected["total_count"] == 24 and len(selected["items"]) == 1
+    assert selected["advancement_frontier_revision_index"]["claimed_advancement_counts"] == {"agent-a": 24}
+    assert selected["advancement_frontier_revision_index"]["all"]["frontier_revision"] == index["by_agent"][0]["frontier_revision"]
+    empty = filtered_todo_summary(full, role="agent", todo_id="todo_absent")
+    assert empty["total_count"] == 0 and "advancement_frontier_revision_index" not in empty
+
+
+def test_selected_frontier_uses_the_summary_crossing_after_python_attachment_retirement(monkeypatch):
+    from loopx.control_plane import effect_runtime
+    from loopx.control_plane.todos import frontier_revision
+    from loopx.control_plane.todos.goal_todo_projection import filtered_todo_summary
+
+    source = summarize([row(i, claimed_by="agent-a", updated_at="2026-01-01T00:00:00Z")
+                        for i in range(24)], item_limit=None)
+    original = effect_runtime.effect_runtime_result
+    calls = []
+
+    def track(method, request, **kwargs):
+        calls.append(method)
+        return original(method, request, **kwargs)
+
+    monkeypatch.setattr(effect_runtime, "effect_runtime_result", track)
+    monkeypatch.setattr(frontier_revision, "effect_runtime_result", track)
+    selected = filtered_todo_summary(source, role="agent", agent_id="agent-a", item_limit=1)
+    assert selected["advancement_frontier_revision_index"]["claimed_advancement_counts"] == {"agent-a": 24}
+    assert calls == ["todo.summary.project"]
+    assert not hasattr(frontier_revision, "attach_advancement_frontier_revision_index")
+
+
+def test_missing_batched_frontier_never_falls_back_to_another_owner_call(monkeypatch):
+    import pytest
+    from loopx.control_plane import effect_runtime
+    from loopx.control_plane.todos.goal_todo_projection import filtered_todo_summary
+
+    source = summarize([row(1)], item_limit=None)
+    original = effect_runtime.effect_runtime_result
+
+    def drop_index(method, request, **kwargs):
+        assert method == "todo.summary.project"
+        result = original(method, request, **kwargs)
+        result["fields"].pop("advancement_frontier_revision_index")
+        return result
+
+    monkeypatch.setattr(effect_runtime, "effect_runtime_result", drop_index)
+    with pytest.raises(ValueError, match="summary frontier index"):
+        filtered_todo_summary(source, role="agent")

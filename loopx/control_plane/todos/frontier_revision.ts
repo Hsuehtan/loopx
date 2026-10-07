@@ -232,15 +232,42 @@ export function projectAdvancementFrontier(value: unknown): JsonObject {
   const rows = decodeRows(request.rows);
   if (request.operation === "select") return {checkpoint: checkpoint(rows, agent)};
   if (request.operation !== "index") throw new EffectRuntimeRequestError("unsupported frontier revision operation");
+  return {index: frontierIndex(rows)};
+}
+
+function frontierIndex(rows: Row[] | null): JsonObject {
   // An excluded agent can have no claimed rows. It still needs its own lane;
   // falling back to the global unclaimed checkpoint would include excluded work.
   const agents = [...new Set((rows ?? []).filter(row => row.advancement)
     .flatMap(row => [...(row.claim ? [row.claim] : []), ...row.excluded]))].sort();
   const counts = claimedAdvancementCounts(rows);
-  return {index: {schema_version: INDEX, ...(counts === null ? {} : {claimed_advancement_counts: counts}),
+  return {schema_version: INDEX, ...(counts === null ? {} : {claimed_advancement_counts: counts}),
     all: checkpoint(rows, null),
     unclaimed: checkpoint(rows, null, true),
-    by_agent: agents.map(agent_id => ({agent_id, ...checkpoint(rows, agent_id)}))}};
+    by_agent: agents.map(agent_id => ({agent_id, ...checkpoint(rows, agent_id)}))};
+}
+
+/** Compose the existing index owner inside an already-required summary read.
+ * Bind the lossless legacy codec to the validated source before selecting;
+ * display limits must never decide replan identity or commitment counts. */
+export function projectSummaryFrontierIndex(value: unknown, source: readonly JsonObject[],
+  indices: readonly number[]): JsonObject {
+  const rows = decodeRows(value);
+  if (rows === null || rows.length !== source.length) {
+    throw new EffectRuntimeRequestError("summary frontier source cardinality mismatch");
+  }
+  for (const [index, row] of rows.entries()) {
+    const fact = source[index];
+    const actionable = fact.status === "open" && !fact.done &&
+      (!fact.has_resume || fact.resume_ready === true) && !fact.acceptance_blocked;
+    if (row.id !== text(fact.todo_id) || row.claim !== (text(fact.claim) || null) ||
+        JSON.stringify(row.excluded) !== JSON.stringify(fact.excluded) ||
+        row.advancement !== (fact.task_class === "advancement_task") ||
+        row.actionable !== actionable || row.updated !== text(fact.updated_at || fact.completed_at)) {
+      throw new EffectRuntimeRequestError("summary frontier facts disagree with the validated source");
+    }
+  }
+  return frontierIndex(indices.map(index => rows[index]));
 }
 
 function classifyAck(observation: LongChainObservation, value: unknown): AckDecision {
