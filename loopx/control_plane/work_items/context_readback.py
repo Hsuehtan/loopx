@@ -88,6 +88,7 @@ def attach_work_context(payload: dict[str, Any], *, registry_path: Path,
     projected = effect_runtime_result("work_item.context.project", {
         "required_reads": reads, "source_results": results,
         "selected_todo": plan.get("selected_todo"), "user_todos": users,
+        "hook_dispatch": hook_dispatch,
     }, large_local_snapshot=True)
     channel.update(projected)
     if not projected["work_context"]["complete"]:

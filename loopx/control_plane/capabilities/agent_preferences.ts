@@ -3,6 +3,7 @@
  */
 import {createHash} from "node:crypto";
 import {join} from "node:path";
+import {access, constants} from "node:fs/promises";
 import type {JsonObject} from "../effect_program.ts";
 import type {AuthorityStore} from "../coordination/authority_store.ts";
 import {FileAuthorityStore} from "../coordination/file_authority_store.ts";
@@ -90,7 +91,7 @@ export async function executeAgentPreferences(request: JsonObject, store: Author
   if (request.schema_version !== "agent_preferences_request_v1") throw new TypeError("preference request schema mismatch");
   const scope = scopeOf(request);
   const action = request.action;
-  if (!["read", "observe", "remember", "retire", "history"].includes(String(action))) throw new TypeError("invalid preference action");
+  if (!["read", "observe", "turn_context", "remember", "retire", "history"].includes(String(action))) throw new TypeError("invalid preference action");
   const loaded = await store.loadAuthority();
   if (loaded.status !== "loaded" && loaded.status !== "missing") return {ok: false, status: "unavailable", error: "preference_store_unreadable"};
   const rows = loaded.status === "loaded" ? recordsOf(loaded.head, scope) : [];
@@ -100,6 +101,11 @@ export async function executeAgentPreferences(request: JsonObject, store: Author
     observation_count: rows.length};
   const actualRevision = loaded.status === "loaded" ? loaded.provider_revision : null;
   const view = current(rows, actualRevision, now);
+  // One exact-scope snapshot owns discovery and its delivered current body.
+  // Ordinary observe remains content-free for discovery-only callers.
+  if (action === "turn_context") return {ok: true,
+    status: loaded.status === "missing" ? "absent" : "observed",
+    observation_count: rows.length, current: view};
   if (action === "read") return {ok: true, status: "read", current: view};
   if (action === "history") {
     const cursor = request.after_cursor === null || request.after_cursor === undefined ? null : text(request.after_cursor, "after_cursor", 256);
@@ -166,5 +172,14 @@ export async function agentPreferences(request: JsonObject): Promise<JsonObject>
   // authority or changes its provider. Reuse the existing transactional journal.
   const mutating = (request.action === "remember" || request.action === "retire") && request.execute === true;
   const store = new FileAuthorityStore(directory, "preferences", {existingOnly: !mutating});
+  // Keep a known filesystem denial distinct from absence and other failures.
+  // This probe grants no access: the actual store read remains authoritative,
+  // including a permission change or disappearance after this observation.
+  try { await access(store.path, constants.R_OK); }
+  catch (error) {
+    if (["EACCES", "EPERM"].includes(String((error as NodeJS.ErrnoException).code))) {
+      return {ok: false, status: "permission_denied", error: "agent_preferences_permission_denied"};
+    }
+  }
   return executeAgentPreferences(request, store);
 }

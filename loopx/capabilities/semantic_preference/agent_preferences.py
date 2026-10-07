@@ -39,19 +39,21 @@ def extend_turn_start_dispatch(
     goal_id: str,
     agent_id: str | None,
 ) -> Any:
-    # Cheap global negative check only; exact scope discovery remains TS-owned.
-    if not agent_id or not (runtime_root / "agent-preferences").exists():
+    # Each guard observes the exact scope through the typed store owner.
+    # An absent namespace is fresh empty context, not an unobserved capability.
+    if not agent_id:
         return dispatch
-    absent = False
     from ...control_plane.capability_hooks import (
         TurnStartHookRegistration, TURN_START_HOOK_RESULT_SCHEMA_VERSION, dispatch_turn_start_hooks,
     )
 
+    snapshot = None
+
     def produce():
-        nonlocal absent
+        nonlocal snapshot
         state = agent_preferences(registry_path=registry_path, runtime_root=runtime_root,
-                                  goal_id=goal_id, agent_id=agent_id, action="observe")
-        absent = state.get("ok") is True and state.get("status") == "absent"
+                                  goal_id=goal_id, agent_id=agent_id, action="turn_context")
+        snapshot = state
         if not state.get("ok"):
             # The dispatcher exposes this failure; never substitute cached prose.
             return {
@@ -61,7 +63,8 @@ def extend_turn_start_dispatch(
                 "agent_read_required": False, "external_reads_performed": False,
                 "external_writes_performed": False, "local_private_state_mutated": False,
                 "private_content_returned": False, "provider_payload_returned": False,
-                "error_code": "agent_preferences_unreadable",
+                "error_code": ("agent_preferences_permission_denied"
+                    if state.get("status") == "permission_denied" else "agent_preferences_unreadable"),
             }
         count = state["observation_count"]
         return {
@@ -81,19 +84,13 @@ def extend_turn_start_dispatch(
         hook_id="semantic_preference.agent_context", capability_id="semantic-preference",
         requested_read_scope=("owner_private_agent_preferences",), requested_write_scope=(),
         producer=produce,
-        context_reader=lambda: agent_preferences(
-            registry_path=registry_path, runtime_root=runtime_root,
-            goal_id=goal_id, agent_id=agent_id, action="read"),
+        context_reader=lambda: {"ok": True, "status": "read", "current": snapshot["current"]},
         required_read={"kind": "agent_preferences", "command": command,
             "reason": "Read current preferences and retirements; apply explicit user corrections before acting. Memory is not permission.",
             "ordering": "before_work"},
     )
 
     extra = dispatch_turn_start_hooks((hook,))
-    if absent:
-        # Preserve the entire feature-off projection, including counters. An
-        # unreadable store/producer error is not absence and remains visible.
-        return dispatch
     result = dict(dispatch or {})
     for key in ("results", "required_reads", "failures", "contexts"):
         if key == "contexts" and not extra.get(key):
