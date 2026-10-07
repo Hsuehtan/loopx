@@ -156,6 +156,29 @@ evaluation still precedes filtering, and returned positions refer to the origina
 array, not a newly numbered subset. Python retains public field allowlists,
 warning text, privacy redaction and Markdown parsing/rendering.
 
+Agent summaries compute their existing `advancement_frontier_revision_index`
+inside this same projection, after source selection and before display caps.
+The shared frontier owner retains the v0 serialization/hash, excluded-agent
+lanes, owned-work ACK identity and commitment counts. Missing or contradictory
+codec facts fail the read; no separate index RPC repairs the result. The
+single-caller Python attachment is retired. Direct frontier calls used by replan
+and successor causality remain, as do Markdown writers for supported unmigrated
+Goals, backup/receipt recovery and Host IO. Internal summary request v3 composes
+the existing owners; v1/v2 callers and public summary/index schemas remain
+compatible. This is a source-read retirement slice, not SQLite-default or full
+writer-retirement qualification. Roll back the matching Python/TS distribution
+together; no persisted data migration is involved.
+
+Agent summary 在同一 TS 批次中生成既有 `advancement_frontier_revision_index`：先筛选
+完整来源，再生成索引，最后应用展示上限。沿用 frontier owner 的 v0 序列化/哈希、
+排除 Agent 的 lane、已拥有工作对应的 ACK 身份和承诺计数。缺失或矛盾的 codec 事实会
+明确拒绝读取，不会补调另一个索引 RPC。删除仅有一个调用方的 Python attachment；
+replan 和 successor 因果核验仍使用的直接 frontier 入口、未迁移 Goal 的 Markdown
+writer、备份/原回执恢复及 Host IO 继续保留。内部 summary 请求升级为 v3，保留
+v1/v2 调用兼容和公共 summary/index schema。本批只完成来源读取边界的退役，不代表
+SQLite 默认或全部 writer 退役已验收；回退时一起回退匹配的 Python/TS 分发，无需迁移
+持久化数据。
+
 **Intentional read behavior changes:** recent completions are ordered by the
 actual `completed_at` instant, preserving timezone offsets and microseconds.
 Later `updated_at` edits no longer make an old completion recent. Missing or
