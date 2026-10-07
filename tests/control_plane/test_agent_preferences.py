@@ -11,7 +11,7 @@ from tests.control_plane.test_quota_settlement_cli import (
 
 
 @pytest.mark.parametrize("provider", ["legacy", "file", "sqlite"])
-def test_explicit_correction_reaches_fresh_turn_without_changing_authority(tmp_path, monkeypatch, provider):
+def test_fresh_empty_and_current_preferences_reach_turn_without_extra_reads(tmp_path, monkeypatch, provider):
     nested = tmp_path / ("workspace  dir" * 12)
     nested.mkdir()
     project, runtime, registry = _write_fixture(nested, required_capability="network")
@@ -36,8 +36,21 @@ def test_explicit_correction_reaches_fresh_turn_without_changing_authority(tmp_p
     rc, empty = call("read")
     assert rc == 0 and empty["current"]["items"] == [], empty
     rc, off = _run_cli(registry, runtime, "quota", "should-run", *scope)
-    assert not any(x["hook_id"] == "semantic_preference.agent_context"
-                   for x in off["turn_start_capability_hook_dispatch"]["results"])
+    observation = {"hook_id": "semantic_preference.agent_context",
+                   "capability_id": "semantic-preference", "status": "empty"}
+    assert observation in off["interaction_contract"]["agent_channel"]["work_context"]["observations"]
+    assert not any(x.get("kind") == "agent_preferences"
+                   for x in off["interaction_contract"]["agent_channel"]["required_reads"])
+    rc, repeated = _run_cli(registry, runtime, "quota", "should-run", *scope)
+    assert rc == 0 and observation in repeated["interaction_contract"]["agent_channel"]["work_context"]["observations"]
+    assert not (runtime / "agent-preferences").exists()
+    rc, empty_plan = _run_cli(registry, runtime, "turn", "plan", *scope)
+    assert rc == 0, empty_plan
+    assert observation in extract_turn_authority(empty_plan)["work_context"]["observations"]
+    tampered = deepcopy(empty_plan)
+    tampered["turn_envelope"]["work_context"]["observations"] = []
+    with pytest.raises(ValueError, match="signature"):
+        extract_turn_authority(tampered)
     args = ("--key", "review.collaboration", "--statement", "Ask designated-reviewer before merging.",
             "--source-ref", "owner-message-1", "--source-quote", "Please use the designated reviewer.",
             "--expected-revision", "none", "--operation-id", "remember-1")
@@ -195,3 +208,68 @@ def test_shared_runtime_preserves_unconfigured_scope_projection(tmp_path, other_
     rc, empty = _run_cli(registry, runtime, "semantic-preference", "agent", "read", *scope)
     assert rc == 0 and empty["current"]["items"] == []
     assert len(list((runtime / "agent-preferences").iterdir())) == 1
+
+
+def test_fresh_hook_uses_one_real_provider_snapshot_for_body(tmp_path, monkeypatch):
+    from loopx.capabilities.semantic_preference import agent_preferences as adapter
+    _, runtime, registry = _write_fixture(tmp_path, required_capability="network")
+    original = adapter.agent_preferences
+    calls = []
+    def traced(**kwargs):
+        calls.append(kwargs["action"])
+        return original(**kwargs)
+    monkeypatch.setattr(adapter, "agent_preferences", traced)
+    def dispatch():
+        return adapter.extend_turn_start_dispatch(None, registry_path=registry,
+            runtime_root=runtime, goal_id=GOAL_ID, agent_id=AGENT_ID)
+    empty = dispatch()
+    assert calls == ["turn_context"]
+    assert empty["results"][0]["status"] == "empty"
+    assert empty["required_reads"] == []
+    assert not (runtime / "agent-preferences").exists()
+    rc, written = _run_cli(registry, runtime, "semantic-preference", "agent", "remember",
+        "--goal-id", GOAL_ID, "--agent-id", AGENT_ID, "--key", "review",
+        "--statement", "Use the designated reviewer.", "--expected-revision", "none",
+        "--operation-id", "snapshot-write", "--source-ref", "owner-1",
+        "--source-quote", "Use the designated reviewer.", "--execute")
+    assert rc == 0, written
+    calls.clear()
+    delivered = dispatch()
+    assert calls == ["turn_context"]
+    assert delivered["results"][0]["status"] == "observed"
+    assert delivered["contexts"][0]["content"]["current"] == written["current"]
+
+
+def test_permission_denied_hook_is_not_empty_and_recovers(tmp_path):
+    import os
+    if os.geteuid() == 0:
+        pytest.skip("root bypasses POSIX read permission")
+    _, runtime, registry = _write_fixture(tmp_path, required_capability="network")
+    scope = ("--goal-id", GOAL_ID, "--agent-id", AGENT_ID)
+    rc, written = _run_cli(registry, runtime, "semantic-preference", "agent", "remember", *scope,
+        "--key", "review", "--statement", "Use the designated reviewer.",
+        "--expected-revision", "none", "--operation-id", "permission-write",
+        "--source-ref", "owner-1", "--source-quote", "Use the designated reviewer.", "--execute")
+    assert rc == 0, written
+    store = next((runtime / "agent-preferences").glob("*/authority-store-*.json"))
+    store.chmod(0)
+    try:
+        rc, denied = _run_cli(registry, runtime, "semantic-preference", "agent", "read", *scope)
+        assert rc != 0 and denied["status"] == "permission_denied", denied
+        rc, quota = _run_cli(registry, runtime, "quota", "should-run", *scope)
+        assert rc == 0, quota
+        context = quota["interaction_contract"]["agent_channel"]["work_context"]
+        assert not any(x["hook_id"] == "semantic_preference.agent_context"
+                       for x in context.get("observations", []))
+        assert context["unavailable_context"]["affected_hooks"] == [{
+            "hook_id": "semantic_preference.agent_context", "capability_id": "semantic-preference",
+            "status": "unavailable", "error_code": "agent_preferences_permission_denied"}]
+        assert context["unavailable_context"]["dependent_action_policy"] == "hold_until_fresh_context"
+    finally:
+        store.chmod(0o600)
+    rc, recovered = _run_cli(registry, runtime, "quota", "should-run", *scope)
+    assert rc == 0, recovered
+    context = recovered["interaction_contract"]["agent_channel"]["work_context"]
+    assert "unavailable_context" not in context
+    assert next(x["content"]["current"] for x in context["sources"]
+                if x.get("kind") == "agent_preferences") == written["current"]

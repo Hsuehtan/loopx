@@ -28,6 +28,34 @@ function readFacts(): JsonObject {
     selected_todo: {todo_id: "todo_selected"}};
 }
 
+test("fresh empty hook context is visible without a read; missing and denied stay distinct", () => {
+  const request: JsonObject = {required_reads: [], source_results: [], hook_dispatch: {
+    results: [{hook_id: "semantic_preference.agent_context", capability_id: "semantic-preference",
+      status: "empty", observation_count: 0, agent_read_required: false, error_code: null}], failures: []}};
+  const before = structuredClone(request);
+  const result = projectInteractionWorkContext(request);
+  assert.deepEqual(result.required_reads, []);
+  const context = result.work_context as JsonObject;
+  assert.deepEqual(context.sources, []);
+  assert.deepEqual(context.observations, [{hook_id: "semantic_preference.agent_context",
+    capability_id: "semantic-preference", status: "empty"}]);
+  assert.deepEqual(request, before);
+  const unknown = projectInteractionWorkContext({required_reads: [], source_results: []}).work_context as JsonObject;
+  assert.equal(unknown.observations, undefined);
+  const denied = projectInteractionWorkContext({...request, hook_dispatch: {results: [{
+    hook_id: "semantic_preference.agent_context", capability_id: "semantic-preference",
+    status: "unavailable", error_code: "agent_preferences_permission_denied"}], failures: []}}).work_context as JsonObject;
+  assert.equal(denied.observations, undefined);
+  assert.deepEqual((denied.unavailable_context as JsonObject).affected_hooks, [{
+    hook_id: "semantic_preference.agent_context", capability_id: "semantic-preference",
+    status: "unavailable", error_code: "agent_preferences_permission_denied"}]);
+  for (const patch of [{observation_count: 1}, {agent_read_required: true}, {error_code: "failed"}]) {
+    const broken = structuredClone(request);
+    Object.assign(((broken.hook_dispatch as JsonObject).results as JsonObject[])[0], patch);
+    assert.throws(() => projectInteractionWorkContext(broken), /inconsistent/);
+  }
+});
+
 test("shared reads retain all Goal sources before exact current work and existing hooks", () => {
   const facts = readFacts();
   const before = structuredClone(facts);
